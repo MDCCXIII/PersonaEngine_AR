@@ -376,15 +376,15 @@ local function CreatePanelFrame()
     Panel.levelFS = levelFS
 
     -- Model frame spans almost full width under level line
-    local modelFrame = CreateFrame("Frame", "PE_AR_TargetModelFrame", f)
-    
-	local parent = PE.AR and PE.AR.HUD and PE.AR.HUD.Regions and PE.AR.HUD.Regions.RIGHT_DOSSIER or UIParent
-	frame:SetParent(parent)
-	frame:ClearAllPoints()
-	frame:SetPoint("CENTER", parent, "CENTER", 0, 0)
+	local modelFrame = CreateFrame("Frame", "PE_AR_TargetModelFrame", f)
 
-    modelFrame:SetHeight(220)
-    Panel.modelFrame = modelFrame
+	-- Anchor the model under the level line, full width of the card
+	modelFrame:SetPoint("TOPLEFT", levelFS, "BOTTOMLEFT", 0, -8)
+	modelFrame:SetPoint("TOPRIGHT", f,        "TOPRIGHT", -8, -8)
+	modelFrame:SetHeight(220)
+
+	Panel.modelFrame = modelFrame
+
 
     local modelBG = modelFrame:CreateTexture(nil, "BACKGROUND")
     modelBG:SetAllPoints()

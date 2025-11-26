@@ -93,7 +93,7 @@ local preservedNames = {
 }
 
 local deniedNames = {
-    "Tooltip",     -- blocks GameTooltip, GameTooltipTextLeft1, etc.
+    --"Tooltip",     -- blocks GameTooltip, GameTooltipTextLeft1, etc.
 }
 
 local function NameMatchesPreserved(name)
