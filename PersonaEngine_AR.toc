@@ -1,0 +1,18 @@
+## Interface: 110205
+## Title: Persona Engine - AR HUD
+## Notes: Copporclang's augmented reality visor and HUD overlays
+## Author: Tasu Copporclang
+## Version: 1.0
+## RequiredDeps: PersonaEngine
+## IconTexture: Interface\AddOns\PersonaEngine\references\persona_brain_icon.tga
+
+# AR HUD core
+AR\PE_ARCore.lua
+AR\PE_ARScanner.lua
+
+# AR HUD UI
+AR\UI\PE_UIARHUDSkin.lua
+AR\UI\PE_UIARHUD.lua
+AR\UI\PE_UIARTargetPanel.lua
+
+# (no bindings, no tooltips for now)
