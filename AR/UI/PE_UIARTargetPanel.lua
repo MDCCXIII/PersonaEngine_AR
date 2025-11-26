@@ -20,6 +20,8 @@ local AR = PE.AR
 
 AR.TargetPanel = AR.TargetPanel or {}
 local Panel = AR.TargetPanel
+local Layout = AR.Layout  -- new
+
 
 ------------------------------------------------------
 -- Utilities
@@ -239,17 +241,24 @@ local function CreatePanelFrame()
     end
 
     local f = CreateFrame("Frame", "PE_AR_TargetPanel", UIParent)
-    Panel.frame = f
-	
-	-- Copporclang visor: ignore global UI fades
-    f:SetIgnoreParentAlpha(true)
-    f:SetIgnoreParentScale(true)
+	Panel.frame = f
 
-    -- Taller dossier-style card
-    f:SetSize(260, 300)
-    f:SetPoint("RIGHT", UIParent, "RIGHT", -60, 0)
-    f:SetAlpha(0)
-    f:EnableMouse(false)
+	-- Let layout define size/position; fall back to hardcoded if layout missing
+	if Layout and Layout.Attach then
+		Layout.Attach(f, "targetPanel")
+	else
+		f:SetSize(260, 300)
+		f:SetPoint("RIGHT", UIParent, "RIGHT", -60, 0)
+	end
+
+	f:SetAlpha(0)
+	f:EnableMouse(false)
+	
+	-- Register with layout system for edit mode
+    if Layout and Layout.Register then
+        Layout.Register("targetPanel", f)
+    end
+
 
     --------------------------------------------------
     -- Background + lattice grid

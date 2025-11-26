@@ -5,16 +5,21 @@
 ## Version: 1.0
 ## RequiredDeps: PersonaEngine
 ## IconTexture: Interface\AddOns\PersonaEngine\references\persona_brain_icon.tga
+## SavedVariables: PersonaEngineARDB
+
 
 # AR HUD core
 AR\PE_ARCore.lua
 AR\PE_ARScanner.lua
 AR\PE_ARBlizzHider.lua
+AR\PE_ARLayout.lua
+AR\PE_ARLayoutEditor.lua
 
 # AR HUD UI
 AR\UI\PE_UIARHUDSkin.lua
 AR\UI\PE_UIARHUD.lua
 AR\UI\PE_UIARTargetPanel.lua
+AR\UI\PE_UIARPlayerPanel.lua
 AR\UI\PE_UIARReticle.lua
 
 # (no bindings, no tooltips for now)
