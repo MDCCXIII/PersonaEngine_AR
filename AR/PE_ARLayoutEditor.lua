@@ -15,6 +15,7 @@ end
 PE.AR = PE.AR or {}
 local AR = PE.AR
 
+AR.Layout = AR.Layout or {}
 local Layout = AR.Layout
 if not Layout then
     return
@@ -22,6 +23,12 @@ end
 
 AR.LayoutEditor = AR.LayoutEditor or {}
 local Editor = AR.LayoutEditor
+
+local function GetLayoutDB()
+    _G.PersonaEngineAR_DB = _G.PersonaEngineAR_DB or {}
+    _G.PersonaEngineAR_DB.layout = _G.PersonaEngineAR_DB.layout or {}
+    return _G.PersonaEngineAR_DB.layout
+end
 
 ------------------------------------------------------
 -- State

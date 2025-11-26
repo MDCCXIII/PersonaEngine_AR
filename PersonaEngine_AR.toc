@@ -5,7 +5,7 @@
 ## Version: 1.0
 ## RequiredDeps: PersonaEngine
 ## IconTexture: Interface\AddOns\PersonaEngine\references\persona_brain_icon.tga
-## SavedVariables: PersonaEngineARDB
+## SavedVariables: PersonaEngineAR_DB
 
 
 # AR HUD core

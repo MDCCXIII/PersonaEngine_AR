@@ -257,6 +257,27 @@ local function CreatePanelFrame()
     statusFS:SetJustifyH("LEFT")
     statusFS:SetText("")
     Panel.statusFS = statusFS
+	
+	--------------------------------------------------
+    -- 3d model
+    --------------------------------------------------
+	
+	    -- Model frame for the player (under name/level, above bars)
+    local modelFrame = CreateFrame("Frame", "PE_AR_PlayerModelFrame", f)
+    modelFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -38)
+    modelFrame:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -38)
+    modelFrame:SetHeight(100)          -- make taller/shorter here
+    Panel.modelFrame = modelFrame
+
+    local modelBG = modelFrame:CreateTexture(nil, "BACKGROUND")
+    modelBG:SetAllPoints()
+    modelBG:SetColorTexture(0, 0, 0, 0.55)
+
+    local model = CreateFrame("PlayerModel", "PE_AR_PlayerModel", modelFrame)
+    model:SetAllPoints()
+    model:SetAlpha(0.95)
+    Panel.model = model
+
 
     --------------------------------------------------
     -- Bars: HP + Power
@@ -354,6 +375,19 @@ function Panel.Update()
     Panel.classFS:SetText(BuildClassLine(unit))
     Panel.statusFS:SetText(BuildStatusLine(unit))
 
+	local isSelf = (unit == "player")
+	-- For the player, we *ignore* UnitIsVisible(), because it returns false.
+	if (isSelf or UnitIsVisible(unit)) then -- and not UnitIsDeadOrGhost(unit) then
+		Panel.model:SetUnit(unit)
+		Panel.model:SetPortraitZoom(0)
+		Panel.model:SetCamDistanceScale(1.31)
+		Panel.model:SetPosition(0, 0, 0)
+		Panel.model:SetAlpha(0.95)
+	else
+		Panel.model:SetAlpha(0)
+		Panel.model:ClearModel()
+	end
+	
     local pr, pg, pb = ColorForPlayer()
     Panel.accent:SetColorTexture(pr, pg, pb, 0.95)
     Panel.hpBar:SetStatusBarColor(pr, pg, pb)
