@@ -26,7 +26,8 @@ local updateAccum = 0
 ----------------------------------------------------
 
 local function HUDActive()
-    return AR and AR.IsEnabled and AR.IsEnabled() and AR.visionEnabled
+    -- For the reticle, "HUD active" just means visor is on.
+    return AR and AR.visionEnabled
 end
 
 local function Clamp(v, min, max)

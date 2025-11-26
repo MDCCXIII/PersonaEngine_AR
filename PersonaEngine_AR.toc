@@ -9,6 +9,7 @@
 # AR HUD core
 AR\PE_ARCore.lua
 AR\PE_ARScanner.lua
+AR\PE_ARBlizzHider.lua
 
 # AR HUD UI
 AR\UI\PE_UIARHUDSkin.lua
