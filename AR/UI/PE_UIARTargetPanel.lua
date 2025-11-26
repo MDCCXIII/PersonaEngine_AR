@@ -377,8 +377,12 @@ local function CreatePanelFrame()
 
     -- Model frame spans almost full width under level line
     local modelFrame = CreateFrame("Frame", "PE_AR_TargetModelFrame", f)
-    modelFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -40)
-    modelFrame:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -40)
+    
+	local parent = PE.AR and PE.AR.HUD and PE.AR.HUD.Regions and PE.AR.HUD.Regions.RIGHT_DOSSIER or UIParent
+	frame:SetParent(parent)
+	frame:ClearAllPoints()
+	frame:SetPoint("CENTER", parent, "CENTER", 0, 0)
+
     modelFrame:SetHeight(220)
     Panel.modelFrame = modelFrame
 

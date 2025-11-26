@@ -279,11 +279,17 @@ function AR.ToggleFullHUD()
         SafeCall(AR.HUD         and AR.HUD.Init)
         SafeCall(AR.TargetPanel and AR.TargetPanel.Init)
         SafeCall(AR.Tooltips    and AR.Tooltips.Init)
+		SafeCall(AR.Reticle and AR.Reticle.Init)
+
         AR.initialized = true
     end
 
     -- We leave AR.enabled alone; visor is just “how we see”
     AR.SetVisionEnabled(entering)
+	
+	if AR.Reticle and AR.Reticle.SetEnabled then
+		SafeCall(AR.Reticle.SetEnabled, entering)
+	end
 
     if AR.TargetPanel and AR.TargetPanel.ForceUpdate then
         SafeCall(AR.TargetPanel.ForceUpdate)

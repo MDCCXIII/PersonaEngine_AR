@@ -28,6 +28,36 @@ local MAX_FRAMES = 1 -- 1= only target HUD
 -- Set this to false if you ever want Blizzard nameplates visible again.
 local HIDE_BASE_NAMEPLATES = true
 
+HUD.Regions = HUD.Regions or {}
+
+local function CreateRegion(name, point, relPoint, x, y, width, height)
+    if HUD.Regions[name] then return HUD.Regions[name] end
+
+    local f = CreateFrame("Frame", "PE_ARHUD_" .. name, UIParent)
+    f:SetIgnoreParentAlpha(true)
+    f:SetIgnoreParentScale(true)
+    f:SetFrameStrata("HIGH")
+    f:SetFrameLevel(40)
+
+    f:SetPoint(point, UIParent, relPoint, x, y)
+    f:SetSize(width, height)
+
+    HUD.Regions[name] = f
+    return f
+end
+
+function HUD.CreateRegions()
+    -- Center reticle region: small-ish box around screen center
+    CreateRegion("CENTER_RETICLE", "CENTER", "CENTER", 0, 0, 400, 400)
+
+    -- Right-hand dossier column
+    CreateRegion("RIGHT_DOSSIER", "RIGHT", "RIGHT", -120, 0, 420, 460)
+
+    -- Left-hand status column (future self/pet/focus)
+    CreateRegion("LEFT_STATUS", "LEFT", "LEFT", 120, 0, 420, 460)
+end
+
+
 ------------------------------------------------------
 -- Helper: always fetch the current skin table
 ------------------------------------------------------
@@ -87,6 +117,10 @@ end
 ------------------------------------------------------
 
 function HUD.Init()
+	if HUD.initialized then return end
+
+    HUD.CreateRegions()
+	
     -- Frames come from HUDSkin
     ApplyHideAllBaseNameplates()
 
@@ -95,6 +129,8 @@ function HUD.Init()
     AR.RegisterEvent("UPDATE_MOUSEOVER_UNIT")
     AR.RegisterEvent("NAME_PLATE_UNIT_ADDED")
     AR.RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+	
+	HUD.initialized = true
 end
 
 function HUD.OnEvent(event, ...)

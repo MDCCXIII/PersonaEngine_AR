@@ -14,5 +14,6 @@ AR\PE_ARScanner.lua
 AR\UI\PE_UIARHUDSkin.lua
 AR\UI\PE_UIARHUD.lua
 AR\UI\PE_UIARTargetPanel.lua
+AR\UI\PE_UIARReticle.lua
 
 # (no bindings, no tooltips for now)
