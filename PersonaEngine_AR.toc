@@ -15,15 +15,19 @@ AR\PE_ARBlizzHider.lua
 AR\PE_ARLayout.lua
 AR\PE_ARLayoutEditor.lua
 AR\PE_ARUnitPanel.lua
-AR\PE_ARReticles.lua
+
 
 # AR HUD UI
-AR\UI\PE_UIARHUDSkin.lua
-AR\UI\PE_UIARHUD.lua
+## AR\UI\PE_UIARHUDSkin.lua
+## AR\UI\PE_UIARHUD.lua
 AR\UI\PE_UIARTargetPanel.lua
 AR\UI\PE_UIARFocusPanel.lua
 AR\UI\PE_UIARMouseoverPanel.lua
 AR\UI\PE_UIARPetPanel.lua
 AR\UI\PE_UIARPlayerPanel.lua
+
+
+# AR HUD Reticles
+AR\PE_ARReticles.lua
 
 # (no bindings, no tooltips for now)

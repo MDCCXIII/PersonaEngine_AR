@@ -23,7 +23,7 @@ HUD.lastTargetGUID  = nil
 HUD.lastApplyTime   = 0
 HUD.hideGraceWindow = 0.2  -- seconds to wait before hiding on “no data”
 
-local MAX_FRAMES = 1 -- 1= only target HUD
+local MAX_FRAMES = 0 -- 1= only target HUD
 
 -- Set this to false if you ever want Blizzard nameplates visible again.
 local HIDE_BASE_NAMEPLATES = true

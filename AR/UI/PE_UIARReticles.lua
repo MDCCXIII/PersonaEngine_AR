@@ -62,11 +62,44 @@ local function GetUnitDistanceYards(unit)
     return nil -- unknown
 end
 
+-- Strip Blizzard nameplate visuals but keep the plate as an anchor.
+local function HideNameplateArt(plate)
+    if not plate or plate._PE_AR_Skinned then
+        return
+    end
+    plate._PE_AR_Skinned = true
+
+    local function strip(frame)
+        if not frame then return end
+
+        -- Hide all textures + fontstrings on this frame
+        local regions = { frame:GetRegions() }
+        for _, r in ipairs(regions) do
+            if r:IsObjectType("Texture") or r:IsObjectType("FontString") then
+                r:SetAlpha(0)
+            end
+        end
+
+        -- Hide status bars if present
+        if frame.healthBar then
+            frame.healthBar:SetAlpha(0)
+        end
+        if frame.castBar then
+            frame.castBar:SetAlpha(0)
+        end
+    end
+
+    -- Default nameplates usually have UnitFrame on them; fall back to plate itself.
+    strip(plate.UnitFrame or plate.unitFrame or plate)
+end
+
+
 -- Prefer nameplate, fall back to target/focus frames if needed
 local function GetUnitAnchor(unit)
     if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
         local plate = C_NamePlate.GetNamePlateForUnit(unit)
         if plate then
+			HideNameplateArt(plate)    -- NEW: nuke Blizz art, keep plate alive
             return plate
         end
     end
@@ -79,6 +112,21 @@ local function GetUnitAnchor(unit)
 
     return nil
 end
+
+local function EnsureNameplateCVars()
+    if not (GetCVar and SetCVar) then return end
+
+    -- Enemies: always have plates so we can anchor, even if user turned them off.
+    if tonumber(GetCVar("nameplateShowEnemies") or "0") == 0 then
+        SetCVar("nameplateShowEnemies", 1)
+    end
+
+    -- "All" makes nameplates always show in world, not just in combat.
+    if tonumber(GetCVar("nameplateShowAll") or "0") == 0 then
+        SetCVar("nameplateShowAll", 1)
+    end
+end
+
 
 ------------------------------------------------------
 -- Reticle frame factories
@@ -262,6 +310,8 @@ function Ret.Init()
     if driver then
         return
     end
+	
+	EnsureNameplateCVars()   -- NEW: make sure plates actually exist
 
     EnsureFrames()
 
