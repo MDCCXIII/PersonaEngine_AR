@@ -126,7 +126,6 @@ function AR.UnitPanel.Create(opts)
     local accentFunc  = opts.accentColor  or DefaultAccent
     local castFunc    = opts.castLineFunc or DefaultCastLine
     local poseFunc    = opts.poseFunc
-	local hideWhenNoUnit = opts.hideWhenNoUnit or false
 
 
     local noUnitText  = opts.noUnitText or {
@@ -359,15 +358,6 @@ function AR.UnitPanel.Create(opts)
         local unit = unitToken
 
         if not UnitExists(unit) then
-			if hideWhenNoUnit then
-				-- For things like the pet dossier: vanish completely when there is no unit.
-				frame:SetAlpha(0)
-				frame:EnableMouse(false)
-				if Panel.model then
-					Panel.model:SetAlpha(0)
-					Panel.model:ClearModel()
-				end
-			else
             -- idle state
             Panel.nameFS:SetText(noUnitText.title or "")
             Panel.line1FS:SetText(noUnitText.subtitle or "")
