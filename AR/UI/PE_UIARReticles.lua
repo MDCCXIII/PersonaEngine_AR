@@ -17,6 +17,8 @@ if not PE or type(PE) ~= "table" then
     return
 end
 
+print("|cff20ff80[PersonaEngine_AR] AR Reticles module loaded|r")
+
 PE.AR = PE.AR or {}
 local AR = PE.AR
 
@@ -39,36 +41,28 @@ local function IsAREnabled()
     return true
 end
 
-local function GetLayout()
-    return AR and AR.Layout
-end
-
--- Generic "is this unit something we can actually draw for?"
+-- Only bother on live units that aren't corpses
 local function IsValidUnit(unit)
     return UnitExists(unit) and not UnitIsDeadOrGhost(unit)
 end
 
--- Distance in yards using UnitDistanceSquared (Retail-only, but perfect here)
+-- Distance in yards using UnitDistanceSquared (Retail)
 local function GetUnitDistanceYards(unit)
     if not IsValidUnit(unit) then
         return nil
     end
 
     if UnitDistanceSquared then
-        local d2, checked = UnitDistanceSquared(unit)
-        if checked and d2 and d2 > 0 then
+        local d2, ok = UnitDistanceSquared(unit)
+        if ok and d2 and d2 > 0 then
             return sqrt(d2)
         end
     end
 
-    -- Very soft fallback: nil means "unknown"
-    return nil
+    return nil -- unknown
 end
 
--- Preferred anchor for screen position:
--- 1) Nameplate (if visible),
--- 2) Blizz unit frame (TargetFrame / FocusFrame),
--- 3) nil if we really can't.
+-- Prefer nameplate, fall back to target/focus frames if needed
 local function GetUnitAnchor(unit)
     if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
         local plate = C_NamePlate.GetNamePlateForUnit(unit)
@@ -81,16 +75,13 @@ local function GetUnitAnchor(unit)
         return _G.TargetFrame
     elseif unit == "focus" then
         return _G.FocusFrame
-    elseif unit == "mouseover" then
-        -- Mouseover has no fixed frame; rely on nameplates only
-        return nil
     end
 
     return nil
 end
 
 ------------------------------------------------------
--- Reticle frame creation
+-- Reticle frame factories
 ------------------------------------------------------
 
 local function CreateRingReticle(name, r, g, b)
@@ -105,7 +96,6 @@ local function CreateRingReticle(name, r, g, b)
     tex:SetVertexColor(r, g, b, 0.9)
     f.tex = tex
 
-    -- Optional distance label underneath
     local distFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
     distFS:SetPoint("TOP", f, "BOTTOM", 0, -2)
     distFS:SetJustifyH("CENTER")
@@ -128,7 +118,6 @@ local function CreateMouseoverIndicator()
 
     local tex = f:CreateTexture(nil, "OVERLAY")
     tex:SetAllPoints()
-    -- Small downward-pointing-ish diamond; tweak later if you add a custom arrow texture
     tex:SetTexture("Interface\\Cooldown\\ping4")
     tex:SetVertexColor(1.0, 0.9, 0.2, 0.95)
     f.tex = tex
@@ -150,78 +139,56 @@ local function EnsureFrames()
         return
     end
 
-    Ret.frames.target   = CreateRingReticle("PE_AR_TargetReticle", 1.0, 0.9, 0.2) -- gold-ish
-    Ret.frames.focus    = CreateRingReticle("PE_AR_FocusReticle",  0.2, 1.0, 0.9) -- teal-ish
+    Ret.frames.target    = CreateRingReticle("PE_AR_TargetReticle", 1.0, 0.9, 0.2) -- gold
+    Ret.frames.focus     = CreateRingReticle("PE_AR_FocusReticle",  0.2, 1.0, 0.9) -- teal
     Ret.frames.mouseover = CreateMouseoverIndicator()
-
-    -- Optional: register with layout so you can drag the "reticle origin" later
-    local Layout = GetLayout()
-    if Layout and Layout.Register then
-        -- These are conceptual anchors; for now we just keep them at 0,0 and let
-        -- world anchors drive the actual position. But we register anyway so they
-        -- can be toggled / inspected from the layout editor.
-        Layout.Register("targetReticle", Ret.frames.target, { lock = true })
-        Layout.Register("focusReticle",  Ret.frames.focus,  { lock = true })
-        Layout.Register("mouseoverIndicator", Ret.frames.mouseover, { lock = true })
-    end
 end
 
 ------------------------------------------------------
 -- Core update logic
 ------------------------------------------------------
 
-local function UpdateReticleForUnit(unit, frame, opts)
-    opts = opts or {}
+local function HideReticleFrame(frame)
+    if not frame then return end
+    frame.unit   = nil
+    frame.anchor = nil
+    frame.dist   = nil
+    if frame.distFS then
+        frame.distFS:SetText("")
+    end
+    frame:Hide()
+end
+
+local debugPrintedOnce = false
+
+local function UpdateReticleForUnit(unit, frame, offsetX, offsetY)
+    offsetX = offsetX or 0
+    offsetY = offsetY or -8
 
     if not IsAREnabled() then
-        frame:Hide()
-        frame.unit   = nil
-        frame.anchor = nil
-        frame.dist   = nil
-        if frame.distFS then
-            frame.distFS:SetText("")
-        end
+        HideReticleFrame(frame)
         return
     end
 
     if not IsValidUnit(unit) then
-        frame:Hide()
-        frame.unit   = nil
-        frame.anchor = nil
-        frame.dist   = nil
-        if frame.distFS then
-            frame.distFS:SetText("")
-        end
+        HideReticleFrame(frame)
         return
     end
 
     local anchor = GetUnitAnchor(unit)
-    if not anchor or not anchor:IsShown() then
-        -- On-screen directional pointers will hook here later when
-        -- the unit is off-screen / nameplate hidden.
-        frame:Hide()
-        frame.unit   = unit
-        frame.anchor = nil
-        frame.dist   = nil
-        if frame.distFS then
-            frame.distFS:SetText("")
-        end
+    if not anchor or not anchor:IsVisible() then
+        -- Off-screen / no anchor → later this becomes “directional pointer mode”
+        HideReticleFrame(frame)
         return
     end
 
     frame.unit   = unit
     frame.anchor = anchor
 
-    -- Position the reticle relative to the anchor.
-    -- Slight downward offset to bias toward torso/body.
-    local offsetX = opts.offsetX or 0
-    local offsetY = opts.offsetY or -10
-
     frame:ClearAllPoints()
     frame:SetParent(anchor)
     frame:SetPoint("CENTER", anchor, "CENTER", offsetX, offsetY)
 
-    -- Distance readout (for now just show, later you can replace with color/size logic)
     local dist = GetUnitDistanceYards(unit)
     frame.dist = dist
 
@@ -234,6 +201,12 @@ local function UpdateReticleForUnit(unit, frame, opts)
     end
 
     frame:Show()
+
+    -- Tiny one-time debug ping so we know it actually bound to something
+    if not debugPrintedOnce and unit == "target" then
+        debugPrintedOnce = true
+        print("|cff20ff80[PersonaEngine_AR] Reticle bound to target anchor:|r", anchor:GetName() or "<?>")
+    end
 end
 
 local function UpdateMouseoverIndicator(frame)
@@ -250,30 +223,16 @@ local function UpdateMouseoverIndicator(frame)
     end
 
     local anchor = GetUnitAnchor("mouseover")
-    if not anchor or not anchor:IsShown() then
-        -- No anchor => nothing on-screen to point at
-        frame:Hide()
-        frame.anchor = nil
-        return
-    end
-
-    -- Don't double-indicate if mouseover == target/focus and you decide
-    -- that reticles are "enough" – for now we allow it, but you can
-    -- uncomment this block if you want to suppress:
-    --
-    if UnitIsUnit("mouseover", "target") or UnitIsUnit("mouseover", "focus") then
+    if not anchor or not anchor:IsVisible() then
         frame:Hide()
         frame.anchor = nil
         return
     end
 
     frame.anchor = anchor
-
     frame:ClearAllPoints()
     frame:SetParent(anchor)
-    -- Slightly above the nameplate/head, pointing down
-    frame:SetPoint("BOTTOM", anchor, "TOP", 0, 14)
-
+    frame:SetPoint("BOTTOM", anchor, "TOP", 0, 14) -- above head/nameplate
     frame:Show()
 end
 
@@ -293,11 +252,9 @@ local function OnUpdate(self, elapsed)
 
     EnsureFrames()
 
-    -- Target / focus reticles
-    UpdateReticleForUnit("target", Ret.frames.target, { offsetX = 0, offsetY = -8 })
-    UpdateReticleForUnit("focus",  Ret.frames.focus,  { offsetX = 0, offsetY = -8 })
+    UpdateReticleForUnit("target", Ret.frames.target, 0, -8)
+    UpdateReticleForUnit("focus",  Ret.frames.focus,  0, -8)
 
-    -- Mouseover indicator
     UpdateMouseoverIndicator(Ret.frames.mouseover)
 end
 

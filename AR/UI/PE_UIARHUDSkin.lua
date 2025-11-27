@@ -255,118 +255,127 @@ function Skin.GetFrame(index)
     return Skin.frames[index]
 end
 
+
+function Skin.Apply(frame, plate, entry, ctx)
+    -- AR HUD visuals disabled: keep scanner + logic,
+    -- but don't draw anything over nameplates.
+    if frame then
+        frame:Hide()
+    end
+end
+
 -- ctx = {
 --   role      = "target" | "mouseover",
 --   isPrimary = boolean,
 --   expanded  = boolean (Alt, and only for target)
 -- }
-function Skin.Apply(frame, plate, entry, ctx)
-    local data = entry.data
-    if not frame or not plate or not data then
-        return
-    end
-	--UIFrameFadeIn(frame, 0.15, 0, 1)
+-- function Skin.Apply(frame, plate, entry, ctx)
+    -- local data = entry.data
+    -- if not frame or not plate or not data then
+        -- return
+    -- end
+	-- --UIFrameFadeIn(frame, 0.15, 0, 1)
 
-    frame:SetParent(plate)
-    frame:SetAllPoints(plate)
+    -- frame:SetParent(plate)
+    -- frame:SetAllPoints(plate)
 
-    --------------------------------------------------
-    -- Health bar
-    --------------------------------------------------
-    local hp = Clamp01(data.hpPct or 0)
-    frame.healthBar:SetValue(hp)
-    local hr, hg, hb = ColorForHealth(hp)
-    frame.healthBar:SetStatusBarColor(hr, hg, hb)
+    -- --------------------------------------------------
+    -- -- Health bar
+    -- --------------------------------------------------
+    -- local hp = Clamp01(data.hpPct or 0)
+    -- frame.healthBar:SetValue(hp)
+    -- local hr, hg, hb = ColorForHealth(hp)
+    -- frame.healthBar:SetStatusBarColor(hr, hg, hb)
 
-    --------------------------------------------------
-    -- Power bar
-    --------------------------------------------------
-    local pp = Clamp01(data.powerPct or 0)
-    frame.powerBar:SetValue(pp)
-    local pr, pg, pb = ColorForPower(data)
-    frame.powerBar:SetStatusBarColor(pr, pg, pb)
+    -- --------------------------------------------------
+    -- -- Power bar
+    -- --------------------------------------------------
+    -- local pp = Clamp01(data.powerPct or 0)
+    -- frame.powerBar:SetValue(pp)
+    -- local pr, pg, pb = ColorForPower(data)
+    -- frame.powerBar:SetStatusBarColor(pr, pg, pb)
 
-    --------------------------------------------------
-    -- Threat glow
-    --------------------------------------------------
-    local threat = data.threat or 0
-    if threat and threat >= 2 then
-        local a = (threat == 3) and 0.8 or 0.5
-        frame.threatGlow:SetVertexColor(1.0, 0.2, 0.1, a)
-        frame.threatGlow:SetAlpha(a * 0.6)
-    else
-        frame.threatGlow:SetAlpha(0)
-    end
+    -- --------------------------------------------------
+    -- -- Threat glow
+    -- --------------------------------------------------
+    -- local threat = data.threat or 0
+    -- if threat and threat >= 2 then
+        -- local a = (threat == 3) and 0.8 or 0.5
+        -- frame.threatGlow:SetVertexColor(1.0, 0.2, 0.1, a)
+        -- frame.threatGlow:SetAlpha(a * 0.6)
+    -- else
+        -- frame.threatGlow:SetAlpha(0)
+    -- end
 	
-	local r, g, b = 0.3, 0.8, 1.0 -- default cyan
+	-- local r, g, b = 0.3, 0.8, 1.0 -- default cyan
 
-	if data.hostile then
-		r, g, b = 1.0, 0.2, 0.2
-	elseif not data.friendly then
-		r, g, b = 1.0, 0.8, 0.2
-	else
-		r, g, b = 0.2, 1.0, 0.4
-	end
+	-- if data.hostile then
+		-- r, g, b = 1.0, 0.2, 0.2
+	-- elseif not data.friendly then
+		-- r, g, b = 1.0, 0.8, 0.2
+	-- else
+		-- r, g, b = 0.2, 1.0, 0.4
+	-- end
 
-	-- Casting: override with bright “danger” yellow
-	if data.isCastingInterruptible then
-		r, g, b = 1.0, 1.0, 0.2
-		frame.ring:SetAlpha(0.35 + math.sin(GetTime()*7)*0.1)
-	end
+	-- -- Casting: override with bright “danger” yellow
+	-- if data.isCastingInterruptible then
+		-- r, g, b = 1.0, 1.0, 0.2
+		-- frame.ring:SetAlpha(0.35 + math.sin(GetTime()*7)*0.1)
+	-- end
 
-	frame.ring:SetVertexColor(r, g, b, 0.35)
-	frame.ring:SetAlpha(0.15)
+	-- frame.ring:SetVertexColor(r, g, b, 0.35)
+	-- frame.ring:SetAlpha(0.15)
 	
-	frame:SetFrameStrata("HIGH") --Does this cause hud above menu's?
-	frame:SetFrameLevel(plate:GetFrameLevel() + 50)
+	-- frame:SetFrameStrata("HIGH") --Does this cause hud above menu's?
+	-- frame:SetFrameLevel(plate:GetFrameLevel() + 50)
 
-    --------------------------------------------------
-    -- Name + compact info (left)
-    --------------------------------------------------
-    frame.nameText:SetText(data.name or "Unknown Target")
-    frame.compactText:SetText(BuildCompactLine(data) or "")
+    -- --------------------------------------------------
+    -- -- Name + compact info (left)
+    -- --------------------------------------------------
+    -- frame.nameText:SetText(data.name or "Unknown Target")
+    -- frame.compactText:SetText(BuildCompactLine(data) or "")
 
-    --------------------------------------------------
-    -- Detail text (right) – only for target + expanded
-    --------------------------------------------------
-    if ctx.role == "target" and ctx.expanded then
-		frame.detailText:SetText(BuildDetailText(data) or "")
-		frame.rightLine:Show()
-		frame.rightElbow:Show()
-		frame.innerRing:SetVertexColor(0.2, 0.8, 1.0, 0.45) -- brighter inner ring
-	else
-		frame.detailText:SetText("")
-		frame.rightLine:Hide()
-		frame.rightElbow:Hide()
-		frame.innerRing:SetVertexColor(0, 1, 1, 0.25) -- dimmer
-	end
+    -- --------------------------------------------------
+    -- -- Detail text (right) – only for target + expanded
+    -- --------------------------------------------------
+    -- if ctx.role == "target" and ctx.expanded then
+		-- frame.detailText:SetText(BuildDetailText(data) or "")
+		-- frame.rightLine:Show()
+		-- frame.rightElbow:Show()
+		-- frame.innerRing:SetVertexColor(0.2, 0.8, 1.0, 0.45) -- brighter inner ring
+	-- else
+		-- frame.detailText:SetText("")
+		-- frame.rightLine:Hide()
+		-- frame.rightElbow:Hide()
+		-- frame.innerRing:SetVertexColor(0, 1, 1, 0.25) -- dimmer
+	-- end
 
 
-    --------------------------------------------------
-    -- Basic ring tint: hostile/friendly and casting
-    --------------------------------------------------
-    local r, g, b = 0.3, 0.8, 1.0 -- default soft cyan
-    if data.hostile then
-        r, g, b = 1.0, 0.2, 0.2
-    elseif not data.friendly then
-        r, g, b = 1.0, 0.8, 0.2
-    else
-        r, g, b = 0.2, 1.0, 0.4
-    end
+    -- --------------------------------------------------
+    -- -- Basic ring tint: hostile/friendly and casting
+    -- --------------------------------------------------
+    -- local r, g, b = 0.3, 0.8, 1.0 -- default soft cyan
+    -- if data.hostile then
+        -- r, g, b = 1.0, 0.2, 0.2
+    -- elseif not data.friendly then
+        -- r, g, b = 1.0, 0.8, 0.2
+    -- else
+        -- r, g, b = 0.2, 1.0, 0.4
+    -- end
 
-    if data.isCastingInterruptible then
-        r, g, b = 1.0, 1.0, 0.2
-    end
+    -- if data.isCastingInterruptible then
+        -- r, g, b = 1.0, 1.0, 0.2
+    -- end
 
-    frame.ring:SetVertexColor(r, g, b, 0.35)
+    -- frame.ring:SetVertexColor(r, g, b, 0.35)
 	
-	local dist = data.distance or 10
-	local scale = math.max(0.7, math.min(1.2, 1.2 - (dist * 0.03)))
-	frame:SetScale(scale)
-	frame:SetAlpha(1)   -- force full visibility for HUD
+	-- local dist = data.distance or 10
+	-- local scale = math.max(0.7, math.min(1.2, 1.2 - (dist * 0.03)))
+	-- frame:SetScale(scale)
+	-- frame:SetAlpha(1)   -- force full visibility for HUD
 
-    frame:Show()
-end
+    -- frame:Show()
+-- end
 
 function Skin.Hide(frame)
     if frame then
