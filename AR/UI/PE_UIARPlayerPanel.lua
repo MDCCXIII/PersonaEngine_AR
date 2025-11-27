@@ -3,8 +3,8 @@
 -- PersonaEngine: Screen-space Player Info Panel
 -- Tall dossier layout for the *player*:
 --   Name/class on top
---   HP/Power bars in the middle
---   Status line + cast info underneath.
+--   3D model in the middle
+--   HP/Power bars + cast info underneath.
 -- ##################################################
 
 local MODULE = "AR Player Panel"
@@ -20,7 +20,13 @@ local AR = PE.AR
 AR.PlayerPanel = AR.PlayerPanel or {}
 local Panel = AR.PlayerPanel
 
-local Layout = AR.Layout
+------------------------------------------------------
+-- Layout access (lazy, so load order can't break us)
+------------------------------------------------------
+
+local function GetLayout()
+    return AR and AR.Layout
+end
 
 ------------------------------------------------------
 -- Utilities
@@ -55,7 +61,7 @@ end
 
 local function BuildClassLine(unit)
     local level = UnitLevel(unit) or -1
-    local classLocalized, classFile = UnitClass(unit)
+    local classLocalized = select(1, UnitClass(unit))
     local race = UnitRace(unit) or ""
     local specName
 
@@ -138,20 +144,29 @@ local function CreatePanelFrame()
     local f = CreateFrame("Frame", "PE_AR_PlayerPanel", UIParent)
     Panel.frame = f
 
-    -- Position driven by layout provider
+    -- Position driven by layout provider (or fallback)
+    local Layout = GetLayout()
     if Layout and Layout.Attach then
         Layout.Attach(f, "playerPanel")
     else
-        f:SetSize(260, 210)
+        f:SetSize(260, 340)
         f:SetPoint("LEFT", UIParent, "LEFT", 60, 60)
+    end
+
+    -- Make sure the card is tall enough for:
+    -- name + class + status + tall model + bars + cast text.
+    local minHeight = 340
+    if f:GetHeight() < minHeight then
+        f:SetHeight(minHeight)
     end
 
     f:SetAlpha(0)
     f:EnableMouse(false)
 
-    -- Register with layout system so it can be dragged in edit mode
+    -- Register with layout system so it can be dragged in edit mode.
+    -- We use deferAttach=true because we already called Attach above.
     if Layout and Layout.Register then
-        Layout.Register("playerPanel", f)
+        Layout.Register("playerPanel", f, { deferAttach = true })
     end
 
     --------------------------------------------------
@@ -199,7 +214,7 @@ local function CreatePanelFrame()
     end
 
     --------------------------------------------------
-    -- Accent spine
+    -- Accent spine + borders
     --------------------------------------------------
     local accent = f:CreateTexture(nil, "BORDER")
     accent:SetWidth(3)
@@ -218,8 +233,9 @@ local function CreatePanelFrame()
     local bottomLine = f:CreateTexture(nil, "BORDER")
     bottomLine:SetColorTexture(0.7, 0.9, 1.0, 0.6)
     bottomLine:SetHeight(1)
-    bottomLine:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 4, 1)
-    bottomLine:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, 1)
+    -- NOTE: -1 keeps it *inside* the card, avoids ghost line below.
+    bottomLine:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 4, -1)
+    bottomLine:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, -1)
     Panel.bottomLine = bottomLine
 
     --------------------------------------------------
@@ -257,16 +273,17 @@ local function CreatePanelFrame()
     statusFS:SetJustifyH("LEFT")
     statusFS:SetText("")
     Panel.statusFS = statusFS
-	
-	--------------------------------------------------
-    -- 3d model
+
     --------------------------------------------------
-	
-	    -- Model frame for the player (under name/level, above bars)
+    -- 3D model
+    --------------------------------------------------
+    -- Model frame for the player (under status line, above bars)
     local modelFrame = CreateFrame("Frame", "PE_AR_PlayerModelFrame", f)
-    modelFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -38)
-    modelFrame:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -38)
-    modelFrame:SetHeight(100)          -- make taller/shorter here
+    -- anchor directly under the status line so the text stack is:
+    -- name -> class -> status -> MODEL -> bars
+    modelFrame:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
+    modelFrame:SetPoint("TOPRIGHT", statusFS, "BOTTOMRIGHT", 0, -8)
+    modelFrame:SetHeight(220)          -- tweak this if you want more/less torso
     Panel.modelFrame = modelFrame
 
     local modelBG = modelFrame:CreateTexture(nil, "BACKGROUND")
@@ -278,14 +295,23 @@ local function CreatePanelFrame()
     model:SetAlpha(0.95)
     Panel.model = model
 
+    -- Boot / recovery text overlay, sits on top of the model area
+    local bootFS = modelFrame:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
+    bootFS:SetPoint("CENTER", modelFrame, "CENTER", 0, 0)
+    bootFS:SetJustifyH("CENTER")
+    bootFS:SetJustifyV("MIDDLE")
+    bootFS:SetText("")              -- start empty
+    Panel.bootFS = bootFS
+
+    Panel.modelOnline = false       -- becomes true once the PlayerModel is actually up
 
     --------------------------------------------------
     -- Bars: HP + Power
     --------------------------------------------------
     local hpBar = CreateFrame("StatusBar", nil, f)
     hpBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-    hpBar:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
-    hpBar:SetPoint("TOPRIGHT", statusFS, "BOTTOMRIGHT", 0, -8)
+    hpBar:SetPoint("TOPLEFT", modelFrame, "BOTTOMLEFT", 0, -8)
+    hpBar:SetPoint("TOPRIGHT", modelFrame, "BOTTOMRIGHT", 0, -8)
     hpBar:SetHeight(12)
     hpBar:SetMinMaxValues(0, 1)
     hpBar:SetValue(0)
@@ -358,16 +384,16 @@ function Panel.Update()
     if not (AR.IsEnabled and AR.IsEnabled()) then
         frame:SetAlpha(0)
         frame:EnableMouse(false)
+        if Panel.model then
+            Panel.model:SetAlpha(0)
+            Panel.model:ClearModel()
+        end
         return
     end
 
     local unit = "player"
 
-    if not UnitExists(unit) then
-        frame:SetAlpha(0)
-        frame:EnableMouse(false)
-        return
-    end
+    -- No early bail on UnitExists for the player; API calls handle nils gracefully.
 
     -- Name & class line
     local name = UnitName(unit) or "Unknown"
@@ -375,19 +401,47 @@ function Panel.Update()
     Panel.classFS:SetText(BuildClassLine(unit))
     Panel.statusFS:SetText(BuildStatusLine(unit))
 
-	local isSelf = (unit == "player")
-	-- For the player, we *ignore* UnitIsVisible(), because it returns false.
-	if (isSelf or UnitIsVisible(unit)) then -- and not UnitIsDeadOrGhost(unit) then
-		Panel.model:SetUnit(unit)
-		Panel.model:SetPortraitZoom(0)
-		Panel.model:SetCamDistanceScale(1.31)
-		Panel.model:SetPosition(0, 0, 0)
-		Panel.model:SetAlpha(0.95)
-	else
-		Panel.model:SetAlpha(0)
-		Panel.model:ClearModel()
-	end
-	
+    -- 3D model: always try to pose the player
+    if Panel.model then
+        Panel.model:SetUnit(unit)
+        Panel.model:SetPortraitZoom(0)
+        Panel.model:SetCamDistanceScale(1.31)
+        Panel.model:SetPosition(0, 0, 0)
+        Panel.model:SetAlpha(0.95)
+
+        -- Decide if the visual feed is actually online.
+        local modelOK = true
+        if Panel.model.GetModelFileID then
+            local fileID = Panel.model:GetModelFileID()
+            modelOK = fileID and fileID ~= 0
+        end
+        Panel.modelOnline = not not modelOK
+    else
+        Panel.modelOnline = false
+    end
+
+    -- Crash-recovery text overlay while the model feed is offline
+    if Panel.bootFS then
+        if Panel.modelOnline then
+            -- Visual feed recovered: clear the warning text
+            Panel.bootFS:SetText("")
+        else
+            -- Glitchy “trying to come back online” feel
+            local t = GetTime and GetTime() or 0
+            local phase = math.floor(t % 6)
+            local msg
+            if phase < 2 then
+                msg = "|cffff8040[AR/HUD] RECOVERY MODE|r"
+            elseif phase < 4 then
+                msg = "|cffff4040 Persona feed corrupted…|r"
+            else
+                msg = "|cff20ff70 Reassembling Copporclang visual cache…|r"
+            end
+            Panel.bootFS:SetText(msg)
+        end
+    end
+
+    -- Accent + HP color
     local pr, pg, pb = ColorForPlayer()
     Panel.accent:SetColorTexture(pr, pg, pb, 0.95)
     Panel.hpBar:SetStatusBarColor(pr, pg, pb)
@@ -432,7 +486,7 @@ local function OnEvent(self, event, arg1)
         return
     end
 
-    if event == "PLAYER_LOGIN" then
+    if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         Panel.Update()
     elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
         if arg1 == "player" then
@@ -444,15 +498,14 @@ local function OnEvent(self, event, arg1)
         end
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
         Panel.Update()
-    elseif event == "PLAYER_ENTERING_WORLD" then
+    elseif event == "PLAYER_UPDATE_RESTING" or event == "ZONE_CHANGED_NEW_AREA" then
+        -- refresh status line (IDLE/RESTED + zone)
         Panel.Update()
     end
 end
 
 function Panel.Init()
     if eventFrame then return end
-
-    CreatePanelFrame()
 
     eventFrame = CreateFrame("Frame", "PE_AR_PlayerPanelEvents", UIParent)
     eventFrame:SetScript("OnEvent", OnEvent)
@@ -466,6 +519,8 @@ function Panel.Init()
     eventFrame:RegisterEvent("UNIT_DISPLAYPOWER")
     eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
+    eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 end
 
 function Panel.ForceUpdate()

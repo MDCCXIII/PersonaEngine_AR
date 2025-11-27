@@ -21,9 +21,9 @@ local Layout = AR.Layout
 ------------------------------------------------------
 -- SavedVariables root
 ------------------------------------------------------
--- NOTE:
--- Add this to your .toc if not already present:
+-- PersonaEngine_AR.toc:
 -- ## SavedVariables: PersonaEngineAR_DB
+------------------------------------------------------
 local function GetLayoutDB()
     _G.PersonaEngineAR_DB = _G.PersonaEngineAR_DB or {}
 
@@ -35,109 +35,113 @@ end
 
 ------------------------------------------------------
 -- Default regions
---
--- These are our "first guess" for where things live.
--- Users (or a future editor) can override per region.
 ------------------------------------------------------
 
 Layout.defaults = Layout.defaults or {
     -- Right side stack: focus (top), target, mouseover, pets
     targetPanel = {
-        point  = "RIGHT",
+        point    = "RIGHT",
         relPoint = "RIGHT",
-        x      = -60,
-        y      = 0,
-        width  = 260,
-        height = 300,
+        x        = -60,
+        y        = 0,
+        width    = 260,
+        height   = 300,
     },
 
     focusPanel = {
-        point  = "RIGHT",
+        point    = "RIGHT",
         relPoint = "RIGHT",
-        x      = -60,
-        y      = 220,
-        width  = 260,
-        height = 210,
+        x        = -60,
+        y        = 220,
+        width    = 260,
+        height   = 210,
     },
 
     mouseoverPanel = {
-        point  = "RIGHT",
+        point    = "RIGHT",
         relPoint = "RIGHT",
-        x      = -60,
-        y      = -220,
-        width  = 260,
-        height = 180,
+        x        = -60,
+        y        = -220,
+        width    = 260,
+        height   = 180,
     },
 
     targetPetPanel = {
-        point  = "RIGHT",
+        point    = "RIGHT",
         relPoint = "RIGHT",
-        x      = -330,
-        y      = -40,
-        width  = 220,
-        height = 140,
+        x        = -330,
+        y        = -40,
+        width    = 220,
+        height   = 140,
     },
 
     focusPetPanel = {
-        point  = "RIGHT",
+        point    = "RIGHT",
         relPoint = "RIGHT",
-        x      = -330,
-        y      = 180,
-        width  = 220,
-        height = 140,
+        x        = -330,
+        y        = 180,
+        width    = 220,
+        height   = 140,
     },
 
     -- Left side: player + pet dossiers
     playerPanel = {
-        point  = "LEFT",
+        point    = "LEFT",
         relPoint = "LEFT",
-        x      = 60,
-        y      = 60,
-        width  = 260,
-        height = 210,
+        x        = 60,
+        y        = 60,
+        width    = 260,
+        height   = 210,
     },
 
     playerPetPanel = {
-        point  = "LEFT",
+        point    = "LEFT",
         relPoint = "LEFT",
-        x      = 60,
-        y      = -160,
-        width  = 220,
-        height = 140,
+        x        = 60,
+        y        = -160,
+        width    = 220,
+        height   = 140,
     },
 
-    -- If we ever want a dedicated minimap frame region:
     minimapPanel = {
-        point  = "TOPLEFT",
+        point    = "TOPLEFT",
         relPoint = "TOPLEFT",
-        x      = 40,
-        y      = -40,
-        width  = 220,
-        height = 220,
+        x        = 40,
+        y        = -40,
+        width    = 220,
+        height   = 220,
     },
 
-    -- Future: recommended actions strip, etc.
     actionsPanel = {
-        point  = "BOTTOM",
+        point    = "BOTTOM",
         relPoint = "BOTTOM",
-        x      = 0,
-        y      = 120,
-        width  = 260,
-        height = 80,
+        x        = 0,
+        y        = 120,
+        width    = 260,
+        height   = 80,
     },
 }
 
 ------------------------------------------------------
--- Frame registry (who lives in which region)
+-- Frame registry
 ------------------------------------------------------
 
 Layout.registered = Layout.registered or {}
 
-function Layout.Register(regionName, frame)
+-- Optional opts:
+--   opts.deferAttach = true -> register but do NOT auto-attach yet
+function Layout.Register(regionName, frame, opts)
     if not regionName or not frame then
         return
     end
+
     Layout.registered[regionName] = frame
+
+    -- Key behavior: as soon as a frame is registered,
+    -- snap it to the saved layout (or defaults).
+    if not (opts and opts.deferAttach) then
+        Layout.Attach(frame, regionName)
+    end
 end
 
 function Layout.GetRegistered()
@@ -205,7 +209,6 @@ function Layout.Get(regionName)
     return MergeDefaults(regionName)
 end
 
--- Override a region's layout and persist to SavedVariables
 function Layout.Set(regionName, cfg)
     if not regionName or type(cfg) ~= "table" then
         return
@@ -220,7 +223,6 @@ function Layout.Set(regionName, cfg)
     end
 end
 
--- Attach a frame to a named region: does SetPoint + SetSize.
 -- Optional opts:
 --   opts.noSize = true -> don't touch width/height
 function Layout.Attach(frame, regionName, opts)
@@ -246,8 +248,6 @@ function Layout.Attach(frame, regionName, opts)
     end
 end
 
--- Save the current position/size of a frame back into layout DB.
--- Typically called when the user finishes dragging in layout edit mode.
 function Layout.SaveFromFrame(regionName, frame)
     if not regionName or not frame then
         return
@@ -259,15 +259,27 @@ function Layout.SaveFromFrame(regionName, frame)
     end
 
     local cfg = {
-        point  = point,
+        point    = point,
         relPoint = relPoint or point,
-        x      = x or 0,
-        y      = y or 0,
-        width  = frame:GetWidth(),
-        height = frame:GetHeight(),
+        x        = x or 0,
+        y        = y or 0,
+        width    = frame:GetWidth(),
+        height   = frame:GetHeight(),
     }
 
     Layout.Set(regionName, cfg)
+end
+
+-- Helper: re-apply positions to all registered frames
+function Layout.ReloadAll()
+    local registered = Layout.GetRegistered()
+    if not registered then
+        return
+    end
+
+    for regionName, frame in pairs(registered) do
+        Layout.Attach(frame, regionName)
+    end
 end
 
 ------------------------------------------------------

@@ -24,12 +24,6 @@ end
 AR.LayoutEditor = AR.LayoutEditor or {}
 local Editor = AR.LayoutEditor
 
-local function GetLayoutDB()
-    _G.PersonaEngineAR_DB = _G.PersonaEngineAR_DB or {}
-    _G.PersonaEngineAR_DB.layout = _G.PersonaEngineAR_DB.layout or {}
-    return _G.PersonaEngineAR_DB.layout
-end
-
 ------------------------------------------------------
 -- State
 ------------------------------------------------------
