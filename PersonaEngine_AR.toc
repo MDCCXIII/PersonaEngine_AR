@@ -6,6 +6,8 @@
 ## RequiredDeps: PersonaEngine
 ## IconTexture: Interface\AddOns\PersonaEngine\references\persona_brain_icon.tga
 ## SavedVariables: PersonaEngineAR_DB
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibRangeCheck-3.0
+embeds.xml
 
 
 # AR HUD core

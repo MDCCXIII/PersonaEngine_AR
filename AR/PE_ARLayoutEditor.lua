@@ -3,6 +3,8 @@
 -- PersonaEngine AR: simple in-game layout editor
 -- Lets you drag registered AR frames and saves
 -- their positions into the layout DB.
+-- Also coordinates with AR Reticles' editor so that
+-- all AR HUD editing feels like one mode.
 -- ##################################################
 
 local MODULE = "AR Layout Editor"
@@ -144,6 +146,11 @@ local function ApplyEditMode()
         end
 
         DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF98[PersonaEngine AR]|r Layout edit |cffff4040DISABLED|r.")
+    end
+
+    -- Coordinate with AR Reticles editor (if present)
+    if AR and AR.Reticles and AR.Reticles.SetEditorEnabled then
+        AR.Reticles.SetEditorEnabled(Editor.enabled)
     end
 end
 

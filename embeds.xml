@@ -1,0 +1,5 @@
+<Ui>
+    <Include file="libs\LibStub\LibStub.lua"/>
+    <Include file="libs\CallbackHandler-1.0\CallbackHandler-1.0.xml"/>
+    <Include file="libs\LibRangeCheck-3.0\LibRangeCheck-3.0.lua"/>
+</Ui>
