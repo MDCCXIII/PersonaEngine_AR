@@ -6,9 +6,11 @@
 ## RequiredDeps: PersonaEngine
 ## IconTexture: Interface\AddOns\PersonaEngine\references\persona_brain_icon.tga
 ## SavedVariables: PersonaEngineAR_DB
-## OptionalDeps: LibStub, CallbackHandler-1.0, LibRangeCheck-3.0
-embeds.xml
 
+# Embedded libraries
+libs\LibStub\LibStub.lua
+libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+libs\LibRangeCheck-3.0\LibRangeCheck-3.0.lua
 
 # AR HUD core
 AR\PE_ARCore.lua
@@ -17,19 +19,15 @@ AR\PE_ARBlizzHider.lua
 AR\PE_ARLayout.lua
 AR\PE_ARLayoutEditor.lua
 AR\PE_ARUnitPanel.lua
-
+AR\PE_ARReticles.lua
 
 # AR HUD UI
-## AR\UI\PE_UIARHUDSkin.lua
-## AR\UI\PE_UIARHUD.lua
+AR\UI\PE_UIARHUDSkin.lua
+AR\UI\PE_UIARHUD.lua
 AR\UI\PE_UIARTargetPanel.lua
 AR\UI\PE_UIARFocusPanel.lua
 AR\UI\PE_UIARMouseoverPanel.lua
 AR\UI\PE_UIARPetPanel.lua
 AR\UI\PE_UIARPlayerPanel.lua
-
-
-# AR HUD Reticles
-AR\PE_ARReticles.lua
 
 # (no bindings, no tooltips for now)
