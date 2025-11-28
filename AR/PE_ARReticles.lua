@@ -5,11 +5,13 @@
 -- * Custom textures for target/focus/mouseover
 -- * Nameplates used as invisible anchors only
 -- * Per-reticle distance-based scaling (min/max)
+-- * Smooth scale animation over time
 -- * Distance text stays a constant size
 -- * Uses LibRangeCheck-3.0 for distance where available
 -- * Tunable min/max scale per reticle (SavedVariables)
 -- * Tunable torso offset per creature type (SavedVariables)
--- * Simple in-game editor hooked to AR Layout Editor
+-- * Global mouseover height offset (SavedVariables)
+-- * Editor UI is moved to AR/PE_ARReticleEditor.lua
 -- ##################################################
 
 local MODULE = "AR Reticles"
@@ -52,13 +54,17 @@ local TEXTURES = {
 
 ------------------------------------------------------
 -- Defaults / Tunables
--- 
--- Each reticle key has defaults; user overrides live in
--- PersonaEngineAR_DB.reticles[key].
 ------------------------------------------------------
 
 local REF_PLATE_HEIGHT = 20      -- "normal mob" nameplate height
 local UPDATE_INTERVAL  = 0.01    -- seconds
+local SCALE_SMOOTHING  = 0.25    -- 0..1, fraction of delta per update
+
+local OWNER_PRIORITY = {
+    mouseover = 3,  -- highest priority: what you’re actively mousing
+    target    = 2,
+    focus     = 1,  -- lowest priority
+}
 
 local RETICLE_DEFAULTS = {
     target = {
@@ -72,7 +78,7 @@ local RETICLE_DEFAULTS = {
         maxScale   = 0.30,   -- at near (close-range size)
         texture    = TEXTURES.targetCircle,
         offsetX    = 0,
-        offsetY    = 0,      -- base, we apply a plate-based drop below
+        offsetY    = 0,      -- base; we apply a plate-based drop below
     },
     focus = {
         key        = "focus",
@@ -98,7 +104,7 @@ local RETICLE_DEFAULTS = {
         maxScale   = 0.90,
         texture    = TEXTURES.mouseover,
         offsetX    = 0,
-        offsetY    = 10,     -- above head
+        offsetY    = 10,     -- base; we add global offset on top
     },
 }
 
@@ -121,6 +127,26 @@ local function GetTorsoDB()
     local root = GetARRoot()
     root.torsoOffsets = root.torsoOffsets or {}
     return root.torsoOffsets
+end
+
+-- Global mouseover offset (not per creature type)
+local function GetMouseoverRoot()
+    local root = GetARRoot()
+    if root.mouseoverOffset == nil then
+        root.mouseoverOffset = 0
+    end
+    return root
+end
+
+function Ret.GetMouseoverOffset()
+    local root = GetMouseoverRoot()
+    return root.mouseoverOffset or 0
+end
+
+function Ret.SetMouseoverOffset(offset)
+    local root = GetMouseoverRoot()
+    root.mouseoverOffset = offset or 0
+    Ret.ForceUpdate()
 end
 
 ------------------------------------------------------
@@ -180,7 +206,6 @@ function Ret.InvalidateConfig(key)
     if key then
         Ret.cfgCache[key] = nil
     else
-        -- nuke all
         for k in pairs(Ret.cfgCache) do
             Ret.cfgCache[k] = nil
         end
@@ -195,7 +220,6 @@ function Ret.GetReticleConfig(key)
     return Ret.cfgCache[key]
 end
 
--- Public: update a single field in DB and cache
 function Ret.SetReticleField(key, field, value)
     if not key or not field then return end
     local defaults = RETICLE_DEFAULTS[key]
@@ -205,17 +229,11 @@ function Ret.SetReticleField(key, field, value)
     db[key] = db[key] or {}
     db[key][field] = value
 
-    -- update cache immediately
     Ret.cfgCache[key] = MergeConfig(key)
 end
 
 ------------------------------------------------------
 -- Torso offset per creature type
---
--- Stored as:
---   torsoOffsets[creatureType][reticleKey] = offsetPixels
---
--- The offset is added on top of our base plate-based Y.
 ------------------------------------------------------
 
 local function GetCreatureType(unit)
@@ -237,25 +255,33 @@ function Ret.GetTorsoOffset(reticleKey, unit)
         return 0
     end
 
-    local val = perType[reticleKey]
+    -- Shared offset for this creature type, fallback to any legacy per-key values.
+    local val = perType.shared
+            or perType.target
+            or perType.focus
+            or perType[reticleKey]
+
     if type(val) ~= "number" then
         return 0
     end
     return val
 end
 
+
 function Ret.SetTorsoOffset(reticleKey, creatureType, offset)
-    if not reticleKey or not creatureType then
+    if not creatureType then
         return
     end
 
     local torsoDB = GetTorsoDB()
     torsoDB[creatureType] = torsoDB[creatureType] or {}
-    torsoDB[creatureType][reticleKey] = offset
 
-    -- immediate visual update
+    -- Store as shared so target & focus both use it.
+    torsoDB[creatureType].shared = offset
+
     Ret.ForceUpdate()
 end
+
 
 ------------------------------------------------------
 -- Misc helpers
@@ -292,7 +318,6 @@ local function GetUnitDistanceYards(unit)
         return minR or maxR
     end
 
-    -- Fallback: no LibRangeCheck → "no data"
     return nil
 end
 
@@ -307,7 +332,6 @@ local function ComputeScale(dist, cfg)
     local maxScale = cfg.maxScale or 1.0
 
     if not dist then
-        -- If range is unknown, use maxScale as a default.
         return maxScale
     end
 
@@ -321,7 +345,10 @@ local function ComputeScale(dist, cfg)
     return maxScale + (minScale - maxScale) * t
 end
 
--- Recursively strip *all* visuals from a frame tree, but keep alpha.
+------------------------------------------------------
+-- Nameplate helpers (visual stripping only)
+------------------------------------------------------
+
 local function StripFrameVisuals(frame)
     if not frame or frame._PE_AR_Stripped then
         return
@@ -341,7 +368,6 @@ local function StripFrameVisuals(frame)
     end
 end
 
--- Use plate as invisible anchor: no bars, no names.
 local function HideNameplateArt(plate)
     if not plate then return end
 
@@ -363,7 +389,6 @@ local function MuteNameplate(plate)
     end
 end
 
--- Prefer nameplates (invisible), fall back to Blizz target/focus frames.
 local function GetUnitAnchor(unit)
     if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
         local plate = C_NamePlate.GetNamePlateForUnit(unit)
@@ -388,7 +413,6 @@ local function GetUnitAnchor(unit)
     return nil
 end
 
--- Make sure nameplates exist as anchors, but their own visuals are off.
 local function EnsureNameplateCVars()
     if not (GetCVar and SetCVar) then return end
 
@@ -398,7 +422,6 @@ local function EnsureNameplateCVars()
     if tonumber(GetCVar("nameplateShowAll") or "0") == 0 then
         SetCVar("nameplateShowAll", 1)
     end
-    -- Kill the personal bar under your feet
     if tonumber(GetCVar("nameplateShowSelf") or "1") ~= 0 then
         SetCVar("nameplateShowSelf", 0)
     end
@@ -441,11 +464,12 @@ local function CreateReticleFrame(name, key)
         f.distFS:SetIgnoreParentAlpha(true)
     end
 
-    f.cfg    = cfg
-    f.key    = key      -- "target", "focus", "mouseover"
-    f.unit   = nil
-    f.anchor = nil
-    f.dist   = nil
+    f.cfg          = cfg
+    f.key          = key      -- "target", "focus", "mouseover"
+    f.unit         = nil
+    f.anchor       = nil
+    f.dist         = nil
+    f._currentScale = nil
 
     f:Hide()
     return f
@@ -468,21 +492,41 @@ local function EnsureFrames()
 end
 
 ------------------------------------------------------
--- Core update logic
+-- Core update logic (with smooth scaling)
 ------------------------------------------------------
 
 local function HideReticleFrame(frame)
     if not frame then return end
-    frame.unit   = nil
-    frame.anchor = nil
-    frame.dist   = nil
+    frame.unit         = nil
+    frame.anchor       = nil
+    frame.dist         = nil
+    frame._currentScale = nil
+
     if frame.distFS then
         frame.distFS:SetText("")
+        frame.distFS:SetScale(1)
     end
+
     frame:Hide()
 end
 
-local function UpdateReticleForUnit(unit, frame)
+local function ApplySmoothScale(frame, targetScale)
+    if targetScale <= 0 then
+        targetScale = 0.01
+    end
+
+    local current = frame._currentScale or targetScale
+    local newScale = current + (targetScale - current) * SCALE_SMOOTHING
+
+    frame._currentScale = newScale
+    frame:SetScale(newScale)
+
+    if frame.distFS then
+        frame.distFS:SetScale(1 / newScale)
+    end
+end
+
+local function UpdateReticleForUnit(unit, frame, guidOwner)
     if not frame then return end
 
     local cfg = Ret.GetReticleConfig(frame.key)
@@ -504,7 +548,6 @@ local function UpdateReticleForUnit(unit, frame)
 
     local anchor = GetUnitAnchor(unit)
     if not anchor or not anchor:IsVisible() then
-        -- Off-screen / no anchor → future directional-pointer hook.
         HideReticleFrame(frame)
         return
     end
@@ -520,10 +563,7 @@ local function UpdateReticleForUnit(unit, frame)
     local sizeScaleRaw = plateH / REF_PLATE_HEIGHT
     local sizeScale    = math.min(math.max(sizeScaleRaw, 0.4), 1.6)
 
-    -- Base Y: "torso-ish" drop from plate center
     local baseYOffset = (cfg.offsetY or 0) - (plateH * 5)
-
-    -- Per-creature-type torso adjustment
     local torsoOffset = Ret.GetTorsoOffset(frame.key, unit) or 0
 
     frame:ClearAllPoints()
@@ -536,72 +576,78 @@ local function UpdateReticleForUnit(unit, frame)
         baseYOffset + torsoOffset
     )
 
+        -- Distance label (only one owner per unit GUID)
     local dist = GetUnitDistanceYards(unit)
     frame.dist = dist
 
-    -- Distance label ("--" if we can't get a number)
-    if frame.distFS then
-        if dist then
-            frame.distFS:SetFormattedText("%.0f yd", dist)
-        else
-            frame.distFS:SetText("--")
+    local canShow = true
+    if guidOwner and UnitExists(unit) then
+        local guid = UnitGUID(unit)
+        if guid then
+            local owner = guidOwner[guid]
+            if owner and owner.key ~= frame.key then
+                canShow = false
+            end
         end
     end
 
-    -- Distance-based scaling
+    if frame.distFS then
+        if canShow and dist then
+            frame.distFS:SetFormattedText("%.0f yd", dist)
+        elseif canShow and not dist then
+            frame.distFS:SetText("--")
+        else
+            -- Another reticle “owns” this unit → no text here
+            frame.distFS:SetText("")
+        end
+    end
+
     local distScale = ComputeScale(dist, cfg)
     if distScale < 0.1 then
         distScale = 0.1
     end
 
-    -- Final scale = distance scale * plate-height scale
-    local finalScale = distScale * sizeScale
-    frame:SetScale(finalScale)
-
-    -- Counter-scale the distance text so it stays a constant size
-    if frame.distFS then
-        frame.distFS:SetScale(1 / finalScale)
-    end
+    local targetScale = distScale * sizeScale
+    ApplySmoothScale(frame, targetScale)
 
     frame:Show()
 end
 
-local function UpdateMouseoverIndicator(frame)
+local function UpdateMouseoverIndicator(frame, guidOwner)
     if not frame then return end
 
     local cfg = Ret.GetReticleConfig(frame.key)
     if not cfg then
-        frame:Hide()
-        frame.anchor = nil
+        HideReticleFrame(frame)
         return
     end
     frame.cfg = cfg
 
     if not IsAREnabled() then
-        frame:Hide()
-        frame.anchor = nil
+        HideReticleFrame(frame)
         return
     end
 
     if not UnitExists("mouseover") or UnitIsDeadOrGhost("mouseover") then
-        frame:Hide()
-        frame.anchor = nil
+        HideReticleFrame(frame)
         return
     end
 
     local anchor = GetUnitAnchor("mouseover")
     if not anchor or not anchor:IsVisible() then
-        frame:Hide()
-        frame.anchor = nil
+        HideReticleFrame(frame)
         return
     end
 
-    local plateH = anchor:GetHeight() or REF_PLATE_HEIGHT
+    -- We still use plate height to shape scaling, but NOT for vertical offset.
+    local plateH       = anchor:GetHeight() or REF_PLATE_HEIGHT
     local sizeScaleRaw = plateH / REF_PLATE_HEIGHT
     local sizeScale    = math.min(math.max(sizeScaleRaw, 0.4), 1.6)
 
-    local baseYOffset = (cfg.offsetY or 0) + (plateH * 0.3)
-    local torsoOffset = Ret.GetTorsoOffset(frame.key, "mouseover") or 0
+    -- Fixed offset over the nameplate: config + per-creature torso + global slider.
+    local baseYOffset  = (cfg.offsetY or 0)
+    local torsoOffset  = Ret.GetTorsoOffset(frame.key, "mouseover") or 0
+    local globalOffset = Ret.GetMouseoverOffset() or 0
 
     frame.anchor = anchor
     frame:ClearAllPoints()
@@ -611,34 +657,46 @@ local function UpdateMouseoverIndicator(frame)
         anchor,
         "CENTER",
         (cfg.offsetX or 0),
-        baseYOffset + torsoOffset
+        baseYOffset + torsoOffset + globalOffset
     )
 
+    -- Distance & label ownership
     local dist = GetUnitDistanceYards("mouseover")
     frame.dist = dist
 
-    if frame.distFS then
-        if dist then
-            frame.distFS:SetFormattedText("%.0f yd", dist)
-        else
-            frame.distFS:SetText("--")
+    local canShow = true
+    if guidOwner and UnitExists("mouseover") then
+        local guid = UnitGUID("mouseover")
+        if guid then
+            local owner = guidOwner[guid]
+            if owner and owner.key ~= frame.key then
+                canShow = false
+            end
         end
     end
 
+    if frame.distFS then
+        if canShow and dist then
+            frame.distFS:SetFormattedText("%.0f yd", dist)
+        elseif canShow and not dist then
+            frame.distFS:SetText("--")
+        else
+            frame.distFS:SetText("")
+        end
+    end
+
+    -- Smooth scaling with distance, but this no longer affects offset.
     local distScale = ComputeScale(dist, cfg)
     if distScale < 0.1 then
         distScale = 0.1
     end
 
-    local finalScale = distScale * sizeScale
-    frame:SetScale(finalScale)
-
-    if frame.distFS then
-        frame.distFS:SetScale(1 / finalScale)
-    end
+    local targetScale = distScale * sizeScale
+    ApplySmoothScale(frame, targetScale)
 
     frame:Show()
 end
+
 
 ------------------------------------------------------
 -- Driver
@@ -656,16 +714,35 @@ local function OnUpdate(self, elapsed)
 
     EnsureFrames()
 
-    if Ret.frames.target then
-        UpdateReticleForUnit("target", Ret.frames.target)
+    -- Decide which reticle "owns" the distance text for each unit GUID.
+    local guidOwner = {}
+
+    local function claim(unit, key)
+        if not UnitExists(unit) then return end
+        local guid = UnitGUID(unit)
+        if not guid then return end
+
+        local prio = OWNER_PRIORITY[key] or 0
+        local current = guidOwner[guid]
+        if not current or prio > current.prio then
+            guidOwner[guid] = { key = key, prio = prio }
+        end
     end
-    if Ret.frames.focus then
-        UpdateReticleForUnit("focus", Ret.frames.focus)
-    end
-    if Ret.frames.mouseover then
-        UpdateMouseoverIndicator(Ret.frames.mouseover)
-    end
+
+    -- Priority: mouseover > target > focus
+    claim("mouseover", "mouseover")
+    claim("target",    "target")
+    claim("focus",     "focus")
+
+    local tCfg = Ret.GetReticleConfig("target")
+    local fCfg = Ret.GetReticleConfig("focus")
+    local mCfg = Ret.GetReticleConfig("mouseover")
+
+    UpdateReticleForUnit("target", Ret.frames.target, tCfg, guidOwner)
+    UpdateReticleForUnit("focus",  Ret.frames.focus,  fCfg, guidOwner)
+    UpdateMouseoverIndicator(Ret.frames.mouseover, mCfg, guidOwner)
 end
+
 
 local function OnNameplateAdded(_, event, unit)
     if event ~= "NAME_PLATE_UNIT_ADDED" then return end
@@ -698,253 +775,13 @@ function Ret.ForceUpdate()
 end
 
 ------------------------------------------------------
--- Simple AR HUD "Reticle Editor" UI
---
--- This is toggled by the AR Layout Editor so you get
--- one combined "AR HUD edit" mode:
---   * Min/max scale per reticle (sliders)
---   * Torso offset per creature type (slider, uses current target)
+-- Editor integration stub (real UI in PE_ARReticleEditor.lua)
 ------------------------------------------------------
-
-local EditorUI = {}
-Ret.EditorUI = EditorUI
-
-local function CreateSlider(parent, labelText, minVal, maxVal, step, width)
-    local slider = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
-    slider:SetMinMaxValues(minVal, maxVal)
-    slider:SetValueStep(step or 0.01)
-    slider:SetObeyStepOnDrag(true)
-    slider:SetOrientation("HORIZONTAL")
-    slider:SetWidth(width or 140)
-
-    _G[slider:GetName() .. "Low"]    :SetText(string.format("%.2f", minVal))
-    _G[slider:GetName() .. "High"]   :SetText(string.format("%.2f", maxVal))
-    _G[slider:GetName() .. "Text"]   :SetText(labelText or "")
-
-    return slider
-end
-
-local function CreateReticleEditorFrame()
-    if EditorUI.frame then
-        return
-    end
-
-    local f = CreateFrame("Frame", "PE_AR_ReticleEditor", UIParent, "BackdropTemplate")
-    f:SetSize(360, 260)
-    f:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
-    f:SetFrameStrata("FULLSCREEN_DIALOG")
-    f:SetFrameLevel(60)
-    f:EnableMouse(true)
-    f:SetMovable(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
-
-    f:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 12,
-        insets   = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    f:SetBackdropColor(0, 0, 0, 0.85)
-
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", f, "TOP", 0, -10)
-    title:SetText("PersonaEngine AR — Reticle Editor")
-
-    local sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    sub:SetPoint("TOP", title, "BOTTOM", 0, -4)
-    sub:SetText("Scale & torso offset (per creature type)")
-
-    -- Rows for each reticle
-    local rowY = -40
-    EditorUI.rows = {}
-
-    local function MakeRow(key)
-        local cfg = RETICLE_DEFAULTS[key]
-        if not cfg then return end
-
-        local row = {}
-        row.key = key
-
-        local label = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        label:SetPoint("TOPLEFT", f, "TOPLEFT", 10, rowY)
-        label:SetText(cfg.display or key)
-        row.label = label
-
-        local minSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
-        minSlider:SetMinMaxValues(0.01, 1.00)
-        minSlider:SetValueStep(0.01)
-        minSlider:SetObeyStepOnDrag(true)
-        minSlider:SetOrientation("HORIZONTAL")
-        minSlider:SetWidth(140)
-        minSlider:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -6)
-        _G[minSlider:GetName() .. "Low"]:SetText("0.01")
-        _G[minSlider:GetName() .. "High"]:SetText("1.00")
-        _G[minSlider:GetName() .. "Text"]:SetText("Min Scale")
-        row.minSlider = minSlider
-
-        local maxSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
-        maxSlider:SetMinMaxValues(0.01, 1.50)
-        maxSlider:SetValueStep(0.01)
-        maxSlider:SetObeyStepOnDrag(true)
-        maxSlider:SetOrientation("HORIZONTAL")
-        maxSlider:SetWidth(140)
-        maxSlider:SetPoint("TOPLEFT", minSlider, "BOTTOMLEFT", 0, -10)
-        _G[maxSlider:GetName() .. "Low"]:SetText("0.01")
-        _G[maxSlider:GetName() .. "High"]:SetText("1.50")
-        _G[maxSlider:GetName() .. "Text"]:SetText("Max Scale")
-        row.maxSlider = maxSlider
-
-        EditorUI.rows[key] = row
-        rowY = rowY - 60
-    end
-
-    MakeRow("target")
-    MakeRow("focus")
-    MakeRow("mouseover")
-
-    -- Torso offset controls (per creature type, using current target)
-    local torsoLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    torsoLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 10, rowY)
-    torsoLabel:SetText("Torso offset (current target creature type)")
-    EditorUI.torsoLabel = torsoLabel
-
-    local torsoSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
-    torsoSlider:SetMinMaxValues(-200, 200)
-    torsoSlider:SetValueStep(1)
-    torsoSlider:SetObeyStepOnDrag(true)
-    torsoSlider:SetOrientation("HORIZONTAL")
-    torsoSlider:SetWidth(260)
-    torsoSlider:SetPoint("TOPLEFT", torsoLabel, "BOTTOMLEFT", 0, -6)
-    _G[torsoSlider:GetName() .. "Low"]:SetText("-200")
-    _G[torsoSlider:GetName() .. "High"]:SetText("200")
-    _G[torsoSlider:GetName() .. "Text"]:SetText("Target Reticle Torso Offset (px)")
-    EditorUI.torsoSlider = torsoSlider
-
-    -- Current creature type text
-    local torsoType = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    torsoType:SetPoint("TOPLEFT", torsoSlider, "BOTTOMLEFT", 0, -4)
-    torsoType:SetText("No target")
-    EditorUI.torsoType = torsoType
-
-    -- Close button
-    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    closeBtn:SetSize(80, 22)
-    closeBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
-    closeBtn:SetText("Close")
-    closeBtn:SetScript("OnClick", function()
-        f:Hide()
-    end)
-
-    EditorUI.frame = f
-
-    --------------------------------------------------
-    -- Slider wiring
-    --------------------------------------------------
-
-    local function RefreshScaleSliders()
-        for key, row in pairs(EditorUI.rows) do
-            local cfg = Ret.GetReticleConfig(key)
-            if cfg then
-                row.minSlider:SetValue(cfg.minScale or 0.01)
-                row.maxSlider:SetValue(cfg.maxScale or 1.00)
-            end
-        end
-    end
-
-    EditorUI.RefreshScaleSliders = RefreshScaleSliders
-
-    for key, row in pairs(EditorUI.rows) do
-        row.minSlider:SetScript("OnValueChanged", function(self, val)
-            local cfg = Ret.GetReticleConfig(key)
-            local maxScale = cfg and cfg.maxScale or 1.0
-            -- Ensure min <= max
-            if val > maxScale then
-                val = maxScale
-                self:SetValue(val)
-            end
-            Ret.SetReticleField(key, "minScale", val)
-        end)
-
-        row.maxSlider:SetScript("OnValueChanged", function(self, val)
-            local cfg = Ret.GetReticleConfig(key)
-            local minScale = cfg and cfg.minScale or 0.01
-            if val < minScale then
-                val = minScale
-                self:SetValue(val)
-            end
-            Ret.SetReticleField(key, "maxScale", val)
-        end)
-    end
-
-    local function RefreshTorsoControls()
-        local unit = "target"
-        local creatureType = GetCreatureType(unit)
-        if not creatureType then
-            EditorUI.torsoType:SetText("No target")
-            EditorUI.torsoSlider:SetEnabled(false)
-            EditorUI.torsoSlider:SetValue(0)
-            return
-        end
-
-        EditorUI.torsoType:SetText("Creature type: " .. creatureType)
-
-        local current = Ret.GetTorsoOffset("target", unit) or 0
-        EditorUI.torsoSlider:SetEnabled(true)
-        EditorUI.torsoSlider:SetValue(current)
-    end
-
-    EditorUI.RefreshTorsoControls = RefreshTorsoControls
-
-    torsoSlider:SetScript("OnValueChanged", function(self, val)
-        local unit = "target"
-        local creatureType = GetCreatureType(unit)
-        if not creatureType then
-            return
-        end
-        Ret.SetTorsoOffset("target", creatureType, val)
-    end)
-
-    f:RegisterEvent("PLAYER_TARGET_CHANGED")
-    f:SetScript("OnEvent", function(_, event)
-        if event == "PLAYER_TARGET_CHANGED" then
-            if f:IsShown() then
-                EditorUI.RefreshTorsoControls()
-            end
-        end
-    end)
-
-    f:SetScript("OnShow", function()
-        EditorUI.RefreshScaleSliders()
-        EditorUI.RefreshTorsoControls()
-    end)
-end
 
 function Ret.SetEditorEnabled(flag)
     flag = not not flag
-    CreateReticleEditorFrame()
-
-    if flag then
-        EditorUI.frame:Show()
-        EditorUI.RefreshScaleSliders()
-        EditorUI.RefreshTorsoControls()
-    else
-        EditorUI.frame:Hide()
-    end
-end
-
-------------------------------------------------------
--- Slash (optional manual toggle)
-------------------------------------------------------
-
-SLASH_PE_ARRETICLE1 = "/pearreticle"
-SlashCmdList["PE_ARRETICLE"] = function()
-    CreateReticleEditorFrame()
-    if EditorUI.frame:IsShown() then
-        EditorUI.frame:Hide()
-    else
-        EditorUI.frame:Show()
+    if AR and AR.ReticleEditor and AR.ReticleEditor.SetEnabled then
+        AR.ReticleEditor.SetEnabled(flag)
     end
 end
 

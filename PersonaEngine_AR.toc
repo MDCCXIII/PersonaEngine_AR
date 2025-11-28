@@ -17,9 +17,10 @@ AR\PE_ARCore.lua
 AR\PE_ARScanner.lua
 AR\PE_ARBlizzHider.lua
 AR\PE_ARLayout.lua
-AR\PE_ARLayoutEditor.lua
 AR\PE_ARUnitPanel.lua
 AR\PE_ARReticles.lua
+AR\PE_ARReticleEditor.lua
+AR\PE_ARLayoutEditor.lua
 
 # AR HUD UI
 AR\UI\PE_UIARHUDSkin.lua
