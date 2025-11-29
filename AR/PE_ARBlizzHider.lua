@@ -36,6 +36,8 @@ local FRAME_NAMES = {
     "PetCastingBarFrame",
     "TargetFrameSpellBar",
     "FocusFrameSpellBar",
+	
+	"NamePlate",
 }
 
 ------------------------------------------------------

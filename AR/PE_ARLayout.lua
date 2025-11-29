@@ -18,6 +18,9 @@ local AR = PE.AR
 AR.Layout = AR.Layout or {}
 local Layout = AR.Layout
 
+local CreateFrame = _G.CreateFrame
+local UIParent   = _G.UIParent
+
 ------------------------------------------------------
 -- SavedVariables root
 ------------------------------------------------------
@@ -120,6 +123,16 @@ Layout.defaults = Layout.defaults or {
         width    = 260,
         height   = 80,
     },
+
+    -- Theo Box: default region for Theo arrows
+    ["Theo Box"] = {
+        point    = "CENTER",
+        relPoint = "CENTER",
+        x        = 0,
+        y        = -220,
+        width    = 260,
+        height   = 140,
+    },
 }
 
 ------------------------------------------------------
@@ -137,8 +150,8 @@ function Layout.Register(regionName, frame, opts)
 
     Layout.registered[regionName] = frame
 
-    -- Key behavior: as soon as a frame is registered,
-    -- snap it to the saved layout (or defaults).
+    -- As soon as a frame is registered, snap it to the saved layout
+    -- (defaults merged with saved overrides).
     if not (opts and opts.deferAttach) then
         Layout.Attach(frame, regionName)
     end
@@ -281,6 +294,18 @@ function Layout.ReloadAll()
         Layout.Attach(frame, regionName)
     end
 end
+
+------------------------------------------------------
+-- Login driver: ensure all registered frames (including
+-- Theo Box) re-attach to their saved positions/sizes
+-- after UI reload / relog.
+------------------------------------------------------
+
+local driver = CreateFrame("Frame")
+driver:RegisterEvent("PLAYER_LOGIN")
+driver:SetScript("OnEvent", function()
+    Layout.ReloadAll()
+end)
 
 ------------------------------------------------------
 -- Module registration

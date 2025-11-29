@@ -48,19 +48,65 @@ local function CreateHandle(regionName, frame)
         handle = CreateFrame("Frame", nil, frame, "BackdropTemplate")
         Editor.handles[frame] = handle
 
-        handle:SetAllPoints(frame)
+        if regionName == "Theo Box" then
+            -- Only a thin top bar is draggable/clickable; interior stays click-through.
+            handle:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+            handle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+            handle:SetHeight(20)
+        else
+            handle:SetAllPoints(frame)
+        end
+
         handle:SetFrameStrata("FULLSCREEN_DIALOG")
         handle:SetFrameLevel(frame:GetFrameLevel() + 20)
 
-        handle:SetBackdrop({
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            edgeSize = 12,
-        })
-        handle:SetBackdropBorderColor(0.2, 1.0, 0.7, 0.9)
+        -- For most regions, the handle draws the border.
+        -- For Theo Box, the real box has the border; handle is invisible.
+        if regionName ~= "Theo Box" then
+            handle:SetBackdrop({
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                edgeSize = 12,
+            })
+            handle:SetBackdropBorderColor(0.2, 1.0, 0.7, 0.9)
+        end
 
         handle.label = handle:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
         handle.label:SetPoint("TOPLEFT", handle, "TOPLEFT", 4, -4)
         handle.label:SetText(regionName or "AR Region")
+
+        -- Mousewheel resize for Theo box while in /pearlayout
+        handle:EnableMouseWheel(true)
+        handle:SetScript("OnMouseWheel", function(self, delta)
+            -- Only special-case the Theo box; other regions ignore scroll
+            if regionName ~= "Theo Box" then
+                return
+            end
+
+            local parent = self:GetParent()
+            if not parent then
+                return
+            end
+
+            local step    = 8 * delta
+            local minSize = 40
+
+            local w, h = parent:GetSize()
+            if IsAltKeyDown() then
+                -- Alt: adjust vertical size only
+                h = math.max(minSize, h + step)
+            else
+                -- Normal: grow/shrink both width and height together
+                w = math.max(minSize, w + step)
+                h = math.max(minSize, h + step)
+            end
+
+            parent:SetSize(w, h)
+
+            -- Persist the new size into layout DB
+            if Layout.SaveFromFrame then
+                Layout.SaveFromFrame(regionName, parent)
+            end
+        end)
 
         handle:Hide()
     end
@@ -86,6 +132,33 @@ local function HookFrameForEdit(regionName, frame)
     }
     Editor.original[frame] = info
 
+    -- Special case: Theo Box should be mostly click-through, with only the border draggable.
+    if regionName == "Theo Box" then
+        frame:SetMovable(true) -- allow moving, but keep it mouse-transparent
+
+        local handle = CreateHandle(regionName, frame)
+        if handle then
+            handle:Show()
+            handle:SetMovable(true)
+            handle:EnableMouse(true)
+            handle:RegisterForDrag("LeftButton")
+
+            handle:SetScript("OnDragStart", function(h)
+                frame:StartMoving()
+            end)
+
+            handle:SetScript("OnDragStop", function(h)
+                frame:StopMovingOrSizing()
+                if Layout.SaveFromFrame then
+                    Layout.SaveFromFrame(regionName, frame)
+                end
+            end)
+        end
+
+        return
+    end
+
+    -- Default behavior for all other regions
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")

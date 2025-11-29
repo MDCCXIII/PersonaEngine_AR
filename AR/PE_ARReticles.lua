@@ -1,17 +1,19 @@
 -- ##################################################
 -- AR/PE_ARReticles.lua
--- PersonaEngine AR: screen-space unit reticles
+-- PersonaEngine AR: Reticles + Theo arrows
 --
--- * Custom textures for target/focus/mouseover
--- * Nameplates used as invisible anchors only
--- * Per-reticle distance-based scaling (min/max)
--- * Smooth scale animation over time
--- * Distance text stays a constant size
--- * Uses LibRangeCheck-3.0 for distance where available
--- * Tunable min/max scale per reticle (SavedVariables)
--- * Tunable torso offset per creature type (SavedVariables)
--- * Global mouseover height offset (SavedVariables)
--- * Editor UI is moved to AR/PE_ARReticleEditor.lua
+-- * Custom textures for target / focus / mouseover
+-- * Distance in yards via LibRangeCheck-3.0 (if present)
+-- * Smooth scaling vs distance
+-- * Global mouseover offset (no range-based drift)
+-- * Shared offsets for target+focus (they always overlap)
+-- * Theo mode:
+--     - If unit is inside a configurable front cone → screen reticle
+--     - If unit is outside the cone → arrow on Theo box border
+-- * Exactly one distance label per unit (mouseover/target/focus priority)
+-- * Editors:
+--     /pearreticle → reticle + torso + mouseover offset
+--     /pearlayout  → layout editor toggles Theo box + reticle editor
 -- ##################################################
 
 local MODULE = "AR Reticles"
@@ -28,40 +30,53 @@ AR.Reticles = AR.Reticles or {}
 local Ret = AR.Reticles
 
 ------------------------------------------------------
--- LibRangeCheck (soft dependency)
+-- Libs / globals
 ------------------------------------------------------
 
-local RangeCheck = nil
-if _G.LibStub then
-    RangeCheck = _G.LibStub("LibRangeCheck-3.0", true)
-end
+local RangeCheck = _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
+
+local UIParent          = _G.UIParent
+local CreateFrame       = _G.CreateFrame
+local UnitExists        = _G.UnitExists
+local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
+local UnitGUID          = _G.UnitGUID
+local UnitPosition      = _G.UnitPosition
+local UnitCreatureType  = _G.UnitCreatureType
+local GetPlayerFacing   = _G.GetPlayerFacing
+local C_NamePlate       = _G.C_NamePlate
+local GetCVar           = _G.GetCVar
+local SetCVar           = _G.SetCVar
+
+local cos, sin, atan2, abs, sqrt, pi = math.cos, math.sin, math.atan2, math.abs, math.sqrt, math.pi
 
 ------------------------------------------------------
--- Media paths
+-- Media
 ------------------------------------------------------
 
-local MEDIA_PATH = "Interface\\AddOns\\PersonaEngine_AR\\media\\"
+local ADDON_NAME = ...
+
+local MEDIA_PATH = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\"
 
 local TEXTURES = {
-    targetCircle = MEDIA_PATH .. "My Target Reticle - Red",
-    focusCircle  = MEDIA_PATH .. "My Focus Reticle - Teal",
-    mouseover    = MEDIA_PATH .. "My Mouseover Indicator - Glowing",
-
-    -- Reserved for future off-screen pointer logic:
-    targetArrow  = MEDIA_PATH .. "My Target Arrow - Red",
-    focusArrow   = MEDIA_PATH .. "My Focus Arrow - Teal",
+    targetReticle = MEDIA_PATH .. "My Target Reticle - Red",
+    focusReticle  = MEDIA_PATH .. "My Focus Reticle - Teal",
+    mouseover     = MEDIA_PATH .. "My Mouseover Indicator - Glowing",
+    targetArrow   = MEDIA_PATH .. "My Target Arrow - Red.tga",
+    focusArrow    = MEDIA_PATH .. "My Focus Arrow - Teal.tga",
 }
 
 ------------------------------------------------------
--- Defaults / Tunables
+-- Tunables / defaults
 ------------------------------------------------------
 
-local REF_PLATE_HEIGHT = 20      -- "normal mob" nameplate height
-local UPDATE_INTERVAL  = 0.01    -- seconds
-local SCALE_SMOOTHING  = 0.25    -- 0..1, fraction of delta per update
+local UPDATE_INTERVAL   = 0.01      -- seconds
+local SCALE_SMOOTHING   = 0.25      -- 0..1, fraction of delta each update
+local DEG2RAD           = pi / 180
 
+-- Distance label ownership per unit GUID.
+-- Lower number = higher priority.
 local OWNER_PRIORITY = {
-    mouseover = 3,  -- highest priority: what you’re actively mousing
+    mouseover = 3,  -- highest priority (your custom choice)
     target    = 2,
     focus     = 1,  -- lowest priority
 }
@@ -69,109 +84,115 @@ local OWNER_PRIORITY = {
 local RETICLE_DEFAULTS = {
     target = {
         key        = "target",
-        display    = "Target",
-        baseWidth  = 256,
-        baseHeight = 128,
-        near       = 5,      -- yards
-        far        = 45,     -- yards
-        minScale   = 0.01,   -- at far
-        maxScale   = 0.30,   -- at near (close-range size)
-        texture    = TEXTURES.targetCircle,
-        offsetX    = 0,
-        offsetY    = 0,      -- base; we apply a plate-based drop below
-    },
-    focus = {
-        key        = "focus",
-        display    = "Focus",
+        label      = "Target",
         baseWidth  = 256,
         baseHeight = 128,
         near       = 5,
         far        = 45,
-        minScale   = 0.01,
-        maxScale   = 0.30,
-        texture    = TEXTURES.focusCircle,
+        minScale   = 0.05,
+        maxScale   = 0.35,
+        texture    = TEXTURES.targetReticle,
+        offsetX    = 0,
+        offsetY    = 0,
+    },
+    focus = {
+        key        = "focus",
+        label      = "Focus",
+        baseWidth  = 256,
+        baseHeight = 128,
+        near       = 5,
+        far        = 45,
+        minScale   = 0.05,
+        maxScale   = 0.35,
+        texture    = TEXTURES.focusReticle,
         offsetX    = 0,
         offsetY    = 0,
     },
     mouseover = {
         key        = "mouseover",
-        display    = "Mouseover",
-        baseWidth  = 16,
-        baseHeight = 16,
+        label      = "Mouseover",
+        baseWidth  = 32,
+        baseHeight = 32,
         near       = 5,
-        far        = 350,    -- design max; engine limit is lower
-        minScale   = 0.20,
+        far        = 45,
+        minScale   = 0.40,
         maxScale   = 0.90,
         texture    = TEXTURES.mouseover,
         offsetX    = 0,
-        offsetY    = 10,     -- base; we add global offset on top
+        offsetY    = 10,
     },
 }
 
+-- Torso offsets per creature type (pixels), shared target+focus
+local DEFAULT_TORSO_OFFSETS = {
+    ["Humanoid"]   = -360,
+    ["Beast"]      = -300,
+    ["Mechanical"] = -330,
+}
+
 ------------------------------------------------------
--- SavedVariables helpers
+-- DB helpers
 ------------------------------------------------------
 
 local function GetARRoot()
     _G.PersonaEngineAR_DB = _G.PersonaEngineAR_DB or {}
-    return _G.PersonaEngineAR_DB
+    _G.PersonaEngineAR_DB.reticles = _G.PersonaEngineAR_DB.reticles or {}
+    return _G.PersonaEngineAR_DB.reticles
 end
 
+-- Per-reticle config (target/focus/mouseover)
 local function GetReticleDB()
     local root = GetARRoot()
-    root.reticles = root.reticles or {}
-    return root.reticles
+    root.config = root.config or {}
+    return root.config
 end
 
+-- Torso DB: per creature type, shared between target/focus
 local function GetTorsoDB()
     local root = GetARRoot()
-    root.torsoOffsets = root.torsoOffsets or {}
-    return root.torsoOffsets
+    root.torso = root.torso or {}
+    return root.torso
 end
 
--- Global mouseover offset (not per creature type)
-local function GetMouseoverRoot()
+-- Theo DB: front angle + arrow scales (box rect now lives in layout DB)
+local function GetTheoDB()
     local root = GetARRoot()
-    if root.mouseoverOffset == nil then
-        root.mouseoverOffset = 0
-    end
-    return root
+    root.theo = root.theo or {}
+    local t = root.theo
+    if t.frontAngleDeg == nil then t.frontAngleDeg = 60 end   -- default cone
+    if t.targetScale   == nil then t.targetScale   = 1.0 end
+    if t.focusScale    == nil then t.focusScale    = 1.0 end
+    return t
 end
 
-function Ret.GetMouseoverOffset()
-    local root = GetMouseoverRoot()
-    return root.mouseoverOffset or 0
-end
-
-function Ret.SetMouseoverOffset(offset)
-    local root = GetMouseoverRoot()
-    root.mouseoverOffset = offset or 0
-    Ret.ForceUpdate()
+-- Global mouseover offset
+local function GetMouseoverDB()
+    local root = GetARRoot()
+    root.mouseover = root.mouseover or {}
+    return root.mouseover
 end
 
 ------------------------------------------------------
--- Config cache (defaults + DB overrides)
+-- Reticle config access
 ------------------------------------------------------
 
-Ret.cfgCache = Ret.cfgCache or {}
-
-local function CopyTable(src)
-    local dest = {}
-    for k, v in pairs(src) do
-        dest[k] = v
+local function CopyTableShallow(src)
+    local t = {}
+    if type(src) == "table" then
+        for k, v in pairs(src) do
+            t[k] = v
+        end
     end
-    return dest
+    return t
 end
 
 local function MergeConfig(key)
     local defaults = RETICLE_DEFAULTS[key]
-    if not defaults then
-        return nil
-    end
+    if not defaults then return nil end
 
-    local db      = GetReticleDB()
-    local saved   = db[key]
-    local cfg     = CopyTable(defaults)
+    local db    = GetReticleDB()
+    local saved = db[key]
+    local cfg   = CopyTableShallow(defaults)
 
     if type(saved) == "table" then
         for k, v in pairs(saved) do
@@ -179,28 +200,15 @@ local function MergeConfig(key)
         end
     end
 
-    -- Sanity
-    if not cfg.baseWidth or cfg.baseWidth <= 0 then
-        cfg.baseWidth = defaults.baseWidth or 64
-    end
-    if not cfg.baseHeight or cfg.baseHeight <= 0 then
-        cfg.baseHeight = defaults.baseHeight or 64
-    end
-    if not cfg.near then
-        cfg.near = defaults.near or 0
-    end
-    if not cfg.far or cfg.far <= cfg.near then
-        cfg.far = (defaults.far or (cfg.near + 1))
-    end
-    if not cfg.minScale or cfg.minScale <= 0 then
-        cfg.minScale = defaults.minScale or 0.5
-    end
-    if not cfg.maxScale or cfg.maxScale <= 0 then
-        cfg.maxScale = defaults.maxScale or 1.0
+    -- One-time fix: if old mouseover configs still use target texture, swap them.
+    if key == "mouseover" and cfg.texture == TEXTURES.targetReticle then
+        cfg.texture = TEXTURES.mouseover
     end
 
     return cfg
 end
+
+Ret.cfgCache = Ret.cfgCache or {}
 
 function Ret.InvalidateConfig(key)
     if key then
@@ -220,68 +228,169 @@ function Ret.GetReticleConfig(key)
     return Ret.cfgCache[key]
 end
 
+-- Important: when you change core fields for target or focus, the other is mirrored
+local function IsSharedReticleField(field)
+    return field == "offsetX" or field == "offsetY"
+        or field == "minScale" or field == "maxScale"
+        or field == "near"     or field == "far"
+end
+
 function Ret.SetReticleField(key, field, value)
     if not key or not field then return end
-    local defaults = RETICLE_DEFAULTS[key]
-    if not defaults then return end
+    if not RETICLE_DEFAULTS[key] then return end
 
     local db = GetReticleDB()
     db[key] = db[key] or {}
     db[key][field] = value
 
+    -- Mirror shared fields between target and focus so they always overlap
+    if (key == "target" or key == "focus") and IsSharedReticleField(field) then
+        local other = (key == "target") and "focus" or "target"
+        if RETICLE_DEFAULTS[other] then
+            db[other] = db[other] or {}
+            db[other][field] = value
+            Ret.cfgCache[other] = MergeConfig(other)
+        end
+    end
+
     Ret.cfgCache[key] = MergeConfig(key)
-end
-
-------------------------------------------------------
--- Torso offset per creature type
-------------------------------------------------------
-
-local function GetCreatureType(unit)
-    if not unit or not UnitExists(unit) then
-        return nil
-    end
-    return UnitCreatureType(unit) or "UNKNOWN"
-end
-
-function Ret.GetTorsoOffset(reticleKey, unit)
-    local creatureType = GetCreatureType(unit)
-    if not creatureType then
-        return 0
-    end
-
-    local torsoDB = GetTorsoDB()
-    local perType = torsoDB[creatureType]
-    if not perType then
-        return 0
-    end
-
-    -- Shared offset for this creature type, fallback to any legacy per-key values.
-    local val = perType.shared
-            or perType.target
-            or perType.focus
-            or perType[reticleKey]
-
-    if type(val) ~= "number" then
-        return 0
-    end
-    return val
-end
-
-
-function Ret.SetTorsoOffset(reticleKey, creatureType, offset)
-    if not creatureType then
-        return
-    end
-
-    local torsoDB = GetTorsoDB()
-    torsoDB[creatureType] = torsoDB[creatureType] or {}
-
-    -- Store as shared so target & focus both use it.
-    torsoDB[creatureType].shared = offset
-
     Ret.ForceUpdate()
 end
 
+------------------------------------------------------
+-- Torso offsets (target + focus share per creature type)
+------------------------------------------------------
+
+local function GetCreatureType(unitOrType)
+    if not unitOrType then
+        return nil
+    end
+
+    -- If it's a real unit token, try to read from the game.
+    if UnitExists(unitOrType) then
+        return UnitCreatureType(unitOrType) or "UNKNOWN"
+    end
+
+    -- Otherwise treat it as a literal creature-type string.
+    if type(unitOrType) == "string" then
+        return unitOrType
+    end
+
+    return nil
+end
+
+function Ret.GetTorsoOffset(reticleKey, unitOrType)
+    -- Mouseover doesn’t use torso offsets
+    if reticleKey == "mouseover" then
+        return 0
+    end
+
+    local creatureType = GetCreatureType(unitOrType)
+    if not creatureType then
+        return 0
+    end
+
+    local db   = GetTorsoDB()
+    local perT = db[creatureType]
+    if type(perT) == "table" and type(perT.shared) == "number" then
+        return perT.shared
+    end
+
+    return DEFAULT_TORSO_OFFSETS[creatureType] or 0
+end
+
+function Ret.SetTorsoOffset(creatureType, offset)
+    if not creatureType then return end
+    local db = GetTorsoDB()
+    db[creatureType] = db[creatureType] or {}
+    db[creatureType].shared = offset or 0
+    Ret.ForceUpdate()
+end
+
+------------------------------------------------------
+-- Global mouseover offset (fixed height above plate)
+------------------------------------------------------
+
+function Ret.GetMouseoverOffset()
+    local db = GetMouseoverDB()
+    return db.offsetY or 0
+end
+
+function Ret.SetMouseoverOffset(offset)
+    local db = GetMouseoverDB()
+    db.offsetY = offset or 0
+    Ret.ForceUpdate()
+end
+
+------------------------------------------------------
+-- Theo config helpers
+------------------------------------------------------
+
+function Ret.GetTheoFrontAngleDeg()
+    local t = GetTheoDB()
+    return t.frontAngleDeg or 60
+end
+
+function Ret.SetTheoFrontAngleDeg(deg)
+    if type(deg) ~= "number" then return end
+    if deg < 10 then deg = 10 end
+    if deg > 120 then deg = 120 end
+    local t = GetTheoDB()
+    t.frontAngleDeg = deg
+    Ret.ForceUpdate()
+end
+
+function Ret.GetTheoFrontAngleRad()
+    return Ret.GetTheoFrontAngleDeg() * DEG2RAD
+end
+
+function Ret.GetTheoArrowScale(key)
+    local t = GetTheoDB()
+    if key == "target" then
+        return t.targetScale or 1.0
+    elseif key == "focus" then
+        return t.focusScale or 1.0
+    end
+    return 1.0
+end
+
+function Ret.SetTheoArrowScale(key, val)
+    if type(val) ~= "number" then return end
+    if val < 0.3 then val = 0.3 end
+    if val > 2.0 then val = 2.0 end
+
+    local t = GetTheoDB()
+    if key == "target" then
+        t.targetScale = val
+    elseif key == "focus" then
+        t.focusScale = val
+    end
+    Ret.ForceUpdate()
+end
+
+------------------------------------------------------
+-- Nameplate CVars guard (overlapping plates)
+------------------------------------------------------
+
+local originalNameplateMotion = nil
+
+local function EnsureNameplateCVars()
+    if not C_NamePlate then return end
+
+    if originalNameplateMotion == nil then
+        originalNameplateMotion = GetCVar("nameplateMotion")
+    end
+
+    if GetCVar("nameplateMotion") ~= "1" then
+        SetCVar("nameplateMotion", "1")
+    end
+end
+
+local function RestoreNameplateCVars()
+    if originalNameplateMotion ~= nil then
+        SetCVar("nameplateMotion", originalNameplateMotion)
+    end
+end
 
 ------------------------------------------------------
 -- Misc helpers
@@ -298,27 +407,53 @@ local function IsAREnabled()
 end
 
 local function IsValidUnit(unit)
-    return UnitExists(unit) and not UnitIsDeadOrGhost(unit)
+    return unit and UnitExists(unit) and not UnitIsDeadOrGhost(unit)
 end
 
 local function GetUnitDistanceYards(unit)
     if not unit or not UnitExists(unit) then
         return nil
     end
-
     if RangeCheck then
         local minR, maxR = RangeCheck:GetRange(unit)
         if not minR and not maxR then
             return nil
         end
-
         if minR and maxR then
-            return (minR + maxR) / 2
+            return (minR + maxR) * 0.5
         end
         return minR or maxR
     end
-
     return nil
+end
+
+-- Relative angle (radians) and 2D distance from player → unit
+local function GetRelativeAngleAndDistance(unit)
+    if not IsValidUnit(unit) then
+        return nil
+    end
+
+    local px, py, pz, pm = UnitPosition("player")
+    local ux, uy, uz, um = UnitPosition(unit)
+    if not px or not ux or pm ~= um then
+        return nil
+    end
+
+    local dx = ux - px
+    local dy = uy - py
+    local dist2D = sqrt(dx*dx + dy*dy)
+
+    local facing = GetPlayerFacing() or 0
+    local angle  = atan2(dy, dx)
+    local rel    = angle - facing
+
+    if rel > pi then
+        rel = rel - 2*pi
+    elseif rel < -pi then
+        rel = rel + 2*pi
+    end
+
+    return rel, dist2D
 end
 
 local function ComputeScale(dist, cfg)
@@ -339,115 +474,108 @@ local function ComputeScale(dist, cfg)
         return maxScale
     elseif dist >= far then
         return minScale
-    end
-
-    local t = (dist - near) / (far - near)
-    return maxScale + (minScale - maxScale) * t
-end
-
-------------------------------------------------------
--- Nameplate helpers (visual stripping only)
-------------------------------------------------------
-
-local function StripFrameVisuals(frame)
-    if not frame or frame._PE_AR_Stripped then
-        return
-    end
-    frame._PE_AR_Stripped = true
-
-    local children = { frame:GetChildren() }
-    for _, child in ipairs(children) do
-        StripFrameVisuals(child)
-    end
-
-    local regions = { frame:GetRegions() }
-    for _, r in ipairs(regions) do
-        if r:IsObjectType("Texture") or r:IsObjectType("FontString") then
-            r:SetAlpha(0)
-        end
-    end
-end
-
-local function HideNameplateArt(plate)
-    if not plate then return end
-
-    StripFrameVisuals(plate)
-
-    local uf = plate.UnitFrame or plate.unitFrame
-    if uf then
-        StripFrameVisuals(uf)
-    end
-end
-
-local function MuteNameplate(plate)
-    if not plate then return end
-    plate:SetAlpha(0)
-
-    local uf = plate.UnitFrame or plate.unitFrame
-    if uf and uf.SetAlpha then
-        uf:SetAlpha(0)
-    end
-end
-
-local function GetUnitAnchor(unit)
-    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
-        local plate = C_NamePlate.GetNamePlateForUnit(unit)
-        if plate then
-            HideNameplateArt(plate)
-            MuteNameplate(plate)
-
-            local uf = plate.UnitFrame or plate.unitFrame
-            if uf and uf.healthBar then
-                return uf.healthBar
-            end
-            return plate
-        end
-    end
-
-    if unit == "target" then
-        return _G.TargetFrame
-    elseif unit == "focus" then
-        return _G.FocusFrame
-    end
-
-    return nil
-end
-
-local function EnsureNameplateCVars()
-    if not (GetCVar and SetCVar) then return end
-
-    if tonumber(GetCVar("nameplateShowEnemies") or "0") == 0 then
-        SetCVar("nameplateShowEnemies", 1)
-    end
-    if tonumber(GetCVar("nameplateShowAll") or "0") == 0 then
-        SetCVar("nameplateShowAll", 1)
-    end
-    if tonumber(GetCVar("nameplateShowSelf") or "1") ~= 0 then
-        SetCVar("nameplateShowSelf", 0)
+    else
+        local t = (dist - near) / (far - near)
+        return maxScale - (maxScale - minScale) * t
     end
 end
 
 ------------------------------------------------------
--- Reticle frame factories
+-- Reticle frame factory
 ------------------------------------------------------
 
 local function CreateReticleFrame(name, key)
     local cfg = Ret.GetReticleConfig(key)
-    if not cfg then
-        return nil
-    end
+    if not cfg then return nil end
 
     local f = CreateFrame("Frame", name, UIParent)
     f:SetSize(cfg.baseWidth or 64, cfg.baseHeight or 64)
-    f:SetFrameStrata("FULLSCREEN_DIALOG")
-    f:SetFrameLevel(40)
+    f:SetFrameStrata("MEDIUM")
+    f:SetFrameLevel(10)
     f:EnableMouse(false)
+    f:SetIgnoreParentAlpha(true)
 
     local tex = f:CreateTexture(nil, "OVERLAY")
     tex:SetAllPoints()
     tex:SetTexture(cfg.texture or "Interface\\Cooldown\\ping4")
-    tex:SetVertexColor(1, 1, 1, 1)
     tex:SetBlendMode("ADD")
+    f.tex = tex
+
+    local distFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
+    -- UNDERNEATH the reticle
+    distFS:SetPoint("TOP", f, "BOTTOM", 0, -2)
+    distFS:SetJustifyH("CENTER")
+    distFS:SetTextColor(1, 1, 1, 0.9)
+    distFS:SetText("")
+    f.distFS = distFS
+
+    f.key           = key
+    f.unit          = nil
+    f.dist          = nil
+    f._currentScale = 1
+
+    f:Hide()
+    return f
+end
+
+------------------------------------------------------
+-- Theo box + arrow frames
+------------------------------------------------------
+
+Ret.frames    = Ret.frames    or {}
+Ret.theoBox   = Ret.theoBox   or nil
+Ret.theoArrow = Ret.theoArrow or {}  -- per key
+
+local function EnsureTheoBox()
+    if Ret.theoBox then
+        return
+    end
+
+    local box = CreateFrame("Frame", "PE_AR_TheoBox", UIParent, "BackdropTemplate")
+    box:SetFrameStrata("BACKGROUND")
+    box:SetFrameLevel(1)
+    box:EnableMouse(false)          -- always click-through in normal play
+    box:SetIgnoreParentAlpha(true)
+
+    box:SetBackdrop({
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 12,
+    })
+    box:SetBackdropBorderColor(0.2, 1.0, 0.7, 0.9)
+    box:SetAlpha(0)                 -- hidden by default
+
+    Ret.theoBox = box
+
+    local center = box:CreateTexture(nil, "OVERLAY")
+    center:SetSize(8, 8)
+    center:SetColorTexture(0.2, 1.0, 0.2, 0.8)
+    center:SetPoint("CENTER", box, "CENTER", 0, 0)
+    center:Hide()
+    Ret.theoCenter = center
+
+    -- Let layout system control position/size (defaults + saved)
+    if AR.Layout and AR.Layout.Register then
+        AR.Layout.Register("Theo Box", box)
+    end
+end
+
+local function CreateTheoArrowFrame(name, key)
+    EnsureTheoBox()
+    local f = CreateFrame("Frame", name, Ret.theoBox)
+    f:SetSize(48, 48)
+    f:SetFrameStrata("MEDIUM")
+    f:SetFrameLevel(15)
+    f:EnableMouse(false)
+    f:SetIgnoreParentAlpha(true)
+
+    local tex = f:CreateTexture(nil, "OVERLAY")
+    tex:SetAllPoints()
+    tex:SetBlendMode("ADD")
+    if key == "focus" then
+        tex:SetTexture(TEXTURES.focusArrow)
+    else
+        tex:SetTexture(TEXTURES.targetArrow)
+    end
     f.tex = tex
 
     local distFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
@@ -457,246 +585,273 @@ local function CreateReticleFrame(name, key)
     distFS:SetText("")
     f.distFS = distFS
 
-    if f.SetIgnoreParentAlpha then
-        f:SetIgnoreParentAlpha(true)
-    end
-    if f.distFS and f.distFS.SetIgnoreParentAlpha then
-        f.distFS:SetIgnoreParentAlpha(true)
-    end
-
-    f.cfg          = cfg
-    f.key          = key      -- "target", "focus", "mouseover"
-    f.unit         = nil
-    f.anchor       = nil
-    f.dist         = nil
-    f._currentScale = nil
+    f.key  = key
+    f.unit = nil
 
     f:Hide()
     return f
 end
 
-------------------------------------------------------
--- State
-------------------------------------------------------
-
-Ret.frames = Ret.frames or {}
-
 local function EnsureFrames()
-    if Ret.frames.target and Ret.frames.focus and Ret.frames.mouseover then
-        return
+    if not Ret.frames.target then
+        Ret.frames.target    = CreateReticleFrame("PE_AR_TargetReticle",      "target")
+        Ret.frames.focus     = CreateReticleFrame("PE_AR_FocusReticle",       "focus")
+        Ret.frames.mouseover = CreateReticleFrame("PE_AR_MouseoverIndicator", "mouseover")
     end
 
-    Ret.frames.target    = Ret.frames.target    or CreateReticleFrame("PE_AR_TargetReticle",      "target")
-    Ret.frames.focus     = Ret.frames.focus     or CreateReticleFrame("PE_AR_FocusReticle",       "focus")
-    Ret.frames.mouseover = Ret.frames.mouseover or CreateReticleFrame("PE_AR_MouseoverIndicator", "mouseover")
+    if not Ret.theoArrow.target then
+        Ret.theoArrow.target = CreateTheoArrowFrame("PE_AR_TheoTarget", "target")
+    end
+    if not Ret.theoArrow.focus then
+        Ret.theoArrow.focus  = CreateTheoArrowFrame("PE_AR_TheoFocus",  "focus")
+    end
 end
 
 ------------------------------------------------------
--- Core update logic (with smooth scaling)
+-- Show/hide helpers
 ------------------------------------------------------
 
-local function HideReticleFrame(frame)
-    if not frame then return end
-    frame.unit         = nil
-    frame.anchor       = nil
-    frame.dist         = nil
-    frame._currentScale = nil
+local function HideReticleFrame(f)
+    if not f then return end
+    f.unit          = nil
+    f.dist          = nil
+    f._currentScale = 1
 
-    if frame.distFS then
-        frame.distFS:SetText("")
-        frame.distFS:SetScale(1)
+    if f.distFS then
+        f.distFS:SetText("")
+        f.distFS:SetScale(1)
     end
 
-    frame:Hide()
+    f:Hide()
+end
+
+local function HideTheoArrow(f)
+    if not f then return end
+    f.unit = nil
+    if f.distFS then
+        f.distFS:SetText("")
+        f.distFS:SetScale(1)
+    end
+    f:Hide()
 end
 
 local function ApplySmoothScale(frame, targetScale)
-    if targetScale <= 0 then
-        targetScale = 0.01
-    end
-
+    if not frame then return end
+    targetScale = targetScale or 1.0
     local current = frame._currentScale or targetScale
-    local newScale = current + (targetScale - current) * SCALE_SMOOTHING
-
-    frame._currentScale = newScale
-    frame:SetScale(newScale)
+    local new     = current + (targetScale - current) * SCALE_SMOOTHING
+    frame._currentScale = new
+    frame:SetScale(new)
 
     if frame.distFS then
-        frame.distFS:SetScale(1 / newScale)
+        frame.distFS:SetScale(1 / new)
     end
 end
 
-local function UpdateReticleForUnit(unit, frame, guidOwner)
-    if not frame then return end
+------------------------------------------------------
+-- Distance-label ownership per GUID
+------------------------------------------------------
 
-    local cfg = Ret.GetReticleConfig(frame.key)
-    if not cfg then
-        HideReticleFrame(frame)
-        return
-    end
-    frame.cfg = cfg
+local function BuildGuidOwner()
+    local guidOwner = {}
 
-    if not IsAREnabled() then
-        HideReticleFrame(frame)
-        return
-    end
+    local function claim(unit, key)
+        if not UnitExists(unit) then return end
+        local guid = UnitGUID(unit)
+        if not guid then return end
 
-    if not IsValidUnit(unit) then
-        HideReticleFrame(frame)
-        return
-    end
-
-    local anchor = GetUnitAnchor(unit)
-    if not anchor or not anchor:IsVisible() then
-        HideReticleFrame(frame)
-        return
+        local prio = OWNER_PRIORITY[key] or 999
+        local cur  = guidOwner[guid]
+        if not cur or prio < cur.prio then   -- lower = higher priority
+            guidOwner[guid] = { key = key, prio = prio }
+        end
     end
 
-    frame.unit   = unit
-    frame.anchor = anchor
+    claim("mouseover", "mouseover")
+    claim("target",    "target")
+    claim("focus",     "focus")
 
-    local plateH = anchor:GetHeight() or 0
-    if plateH <= 0 then
-        plateH = REF_PLATE_HEIGHT
+    return guidOwner
+end
+
+local function HasOwnershipForUnit(guidOwner, unit, key)
+    if not guidOwner or not unit or not key or not UnitExists(unit) then
+        return false
+    end
+    local guid = UnitGUID(unit)
+    if not guid then return false end
+    local owner = guidOwner[guid]
+    return owner and owner.key == key
+end
+
+------------------------------------------------------
+-- Core update helpers
+------------------------------------------------------
+
+local function UpdateScreenReticle(unit, frame, cfg, guidOwner)
+    if not frame or not cfg then
+        return HideReticleFrame(frame)
     end
 
-    local sizeScaleRaw = plateH / REF_PLATE_HEIGHT
-    local sizeScale    = math.min(math.max(sizeScaleRaw, 0.4), 1.6)
+    if not IsAREnabled() or not IsValidUnit(unit) then
+        return HideReticleFrame(frame)
+    end
 
-    local baseYOffset = (cfg.offsetY or 0) - (plateH * 5)
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
+    if not plate or not plate.UnitFrame or not plate.UnitFrame.healthBar then
+        return HideReticleFrame(frame)
+    end
+
+    local anchor = plate.UnitFrame.healthBar
+
+    frame:ClearAllPoints()
+
     local torsoOffset = Ret.GetTorsoOffset(frame.key, unit) or 0
 
-    frame:ClearAllPoints()
-    frame:SetParent(anchor)
     frame:SetPoint(
         "CENTER",
         anchor,
         "CENTER",
-        (cfg.offsetX or 0),
-        baseYOffset + torsoOffset
+        cfg.offsetX or 0,
+        (cfg.offsetY or 0) + torsoOffset
     )
 
-        -- Distance label (only one owner per unit GUID)
     local dist = GetUnitDistanceYards(unit)
+    frame.unit = unit
     frame.dist = dist
 
-    local canShow = true
-    if guidOwner and UnitExists(unit) then
-        local guid = UnitGUID(unit)
-        if guid then
-            local owner = guidOwner[guid]
-            if owner and owner.key ~= frame.key then
-                canShow = false
-            end
-        end
-    end
+    local showText = HasOwnershipForUnit(guidOwner, unit, frame.key)
 
     if frame.distFS then
-        if canShow and dist then
+        if showText and dist then
             frame.distFS:SetFormattedText("%.0f yd", dist)
-        elseif canShow and not dist then
+        elseif showText then
             frame.distFS:SetText("--")
         else
-            -- Another reticle “owns” this unit → no text here
             frame.distFS:SetText("")
         end
     end
 
     local distScale = ComputeScale(dist, cfg)
-    if distScale < 0.1 then
-        distScale = 0.1
-    end
-
-    local targetScale = distScale * sizeScale
-    ApplySmoothScale(frame, targetScale)
+    if distScale < 0.1 then distScale = 0.1 end
+    ApplySmoothScale(frame, distScale)
 
     frame:Show()
 end
 
-local function UpdateMouseoverIndicator(frame, guidOwner)
-    if not frame then return end
+local function UpdateTheoArrow(unit, key, arrowFrame, guidOwner)
+    if not arrowFrame then return end
 
-    local cfg = Ret.GetReticleConfig(frame.key)
-    if not cfg then
-        HideReticleFrame(frame)
-        return
-    end
-    frame.cfg = cfg
-
-    if not IsAREnabled() then
-        HideReticleFrame(frame)
-        return
+    if not IsAREnabled() or not IsValidUnit(unit) then
+        return HideTheoArrow(arrowFrame)
     end
 
-    if not UnitExists("mouseover") or UnitIsDeadOrGhost("mouseover") then
-        HideReticleFrame(frame)
-        return
+    local relAngle, dist = GetRelativeAngleAndDistance(unit)
+    if not relAngle then
+        return HideTheoArrow(arrowFrame)
     end
 
-    local anchor = GetUnitAnchor("mouseover")
-    if not anchor or not anchor:IsVisible() then
-        HideReticleFrame(frame)
-        return
+    local box = Ret.theoBox
+    if not box then
+        return HideTheoArrow(arrowFrame)
     end
 
-    -- We still use plate height to shape scaling, but NOT for vertical offset.
-    local plateH       = anchor:GetHeight() or REF_PLATE_HEIGHT
-    local sizeScaleRaw = plateH / REF_PLATE_HEIGHT
-    local sizeScale    = math.min(math.max(sizeScaleRaw, 0.4), 1.6)
+    arrowFrame:ClearAllPoints()
 
-    -- Fixed offset over the nameplate: config + per-creature torso + global slider.
-    local baseYOffset  = (cfg.offsetY or 0)
-    local torsoOffset  = Ret.GetTorsoOffset(frame.key, "mouseover") or 0
-    local globalOffset = Ret.GetMouseoverOffset() or 0
+    local absRel = abs(relAngle)
+    local forty5 = 45 * DEG2RAD
+    local one35  = 135 * DEG2RAD
 
-    frame.anchor = anchor
+    if absRel >= one35 then
+        arrowFrame:SetPoint("BOTTOM", box, "BOTTOM", 0, 4)
+    elseif relAngle > 0 then
+        if absRel > forty5 then
+            arrowFrame:SetPoint("RIGHT", box, "RIGHT", -4, 0)
+        else
+            arrowFrame:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -4)
+        end
+    else
+        if absRel > forty5 then
+            arrowFrame:SetPoint("LEFT", box, "LEFT", 4, 0)
+        else
+            arrowFrame:SetPoint("TOPLEFT", box, "TOPLEFT", 4, -4)
+        end
+    end
+
+    if arrowFrame.tex then
+        arrowFrame.tex:SetRotation(-relAngle)
+    end
+
+    local scale = Ret.GetTheoArrowScale(key) or 1.0
+    if scale < 0.3 then scale = 0.3 end
+    if scale > 2.0 then scale = 2.0 end
+    arrowFrame:SetScale(scale)
+
+    local showText = HasOwnershipForUnit(guidOwner, unit, key)
+    local distText = arrowFrame.distFS
+    if distText then
+        if showText and dist then
+            distText:SetFormattedText("%.0f yd", dist)
+        elseif showText then
+            distText:SetText("--")
+        else
+            distText:SetText("")
+        end
+        distText:SetScale(1 / scale)
+    end
+
+    arrowFrame.unit = unit
+    arrowFrame:Show()
+end
+
+local function UpdateMouseoverIndicator(frame, cfg, guidOwner)
+    if not frame or not cfg then
+        return HideReticleFrame(frame)
+    end
+
+    if not IsAREnabled() or not IsValidUnit("mouseover") then
+        return HideReticleFrame(frame)
+    end
+
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit("mouseover")
+    if not plate or not plate.UnitFrame or not plate.UnitFrame.healthBar then
+        return HideReticleFrame(frame)
+    end
+
+    local anchor = plate.UnitFrame.healthBar
+
     frame:ClearAllPoints()
-    frame:SetParent(anchor)
+    local globalOffsetY = Ret.GetMouseoverOffset() or 0
     frame:SetPoint(
         "CENTER",
         anchor,
         "CENTER",
-        (cfg.offsetX or 0),
-        baseYOffset + torsoOffset + globalOffset
+        cfg.offsetX or 0,
+        (cfg.offsetY or 0) + globalOffsetY
     )
 
-    -- Distance & label ownership
     local dist = GetUnitDistanceYards("mouseover")
+    frame.unit = "mouseover"
     frame.dist = dist
 
-    local canShow = true
-    if guidOwner and UnitExists("mouseover") then
-        local guid = UnitGUID("mouseover")
-        if guid then
-            local owner = guidOwner[guid]
-            if owner and owner.key ~= frame.key then
-                canShow = false
-            end
-        end
-    end
+    local showText = HasOwnershipForUnit(guidOwner, "mouseover", "mouseover")
 
     if frame.distFS then
-        if canShow and dist then
+        if showText and dist then
             frame.distFS:SetFormattedText("%.0f yd", dist)
-        elseif canShow and not dist then
+        elseif showText then
             frame.distFS:SetText("--")
         else
             frame.distFS:SetText("")
         end
     end
 
-    -- Smooth scaling with distance, but this no longer affects offset.
     local distScale = ComputeScale(dist, cfg)
-    if distScale < 0.1 then
-        distScale = 0.1
-    end
-
-    local targetScale = distScale * sizeScale
-    ApplySmoothScale(frame, targetScale)
+    if distScale < 0.1 then distScale = 0.1 end
+    ApplySmoothScale(frame, distScale)
 
     frame:Show()
 end
-
 
 ------------------------------------------------------
 -- Driver
@@ -704,6 +859,10 @@ end
 
 local driver
 local updateThrottle = 0
+
+function Ret.ForceUpdate()
+    updateThrottle = 0
+end
 
 local function OnUpdate(self, elapsed)
     updateThrottle = updateThrottle + elapsed
@@ -713,43 +872,71 @@ local function OnUpdate(self, elapsed)
     updateThrottle = 0
 
     EnsureFrames()
+    EnsureTheoBox()
 
-    -- Decide which reticle "owns" the distance text for each unit GUID.
-    local guidOwner = {}
+    local guidOwner = BuildGuidOwner()
+    local frontAngle = Ret.GetTheoFrontAngleRad()
 
-    local function claim(unit, key)
-        if not UnitExists(unit) then return end
-        local guid = UnitGUID(unit)
-        if not guid then return end
+    -- TARGET
+    do
+        local unit      = "target"
+        local reticle   = Ret.frames.target
+        local theoArrow = Ret.theoArrow.target
+        local cfg       = Ret.GetReticleConfig("target")
 
-        local prio = OWNER_PRIORITY[key] or 0
-        local current = guidOwner[guid]
-        if not current or prio > current.prio then
-            guidOwner[guid] = { key = key, prio = prio }
+        if IsValidUnit(unit) then
+            local rel = select(1, GetRelativeAngleAndDistance(unit))
+            if rel and abs(rel) > frontAngle then
+                HideReticleFrame(reticle)
+                UpdateTheoArrow(unit, "target", theoArrow, guidOwner)
+            else
+                HideTheoArrow(theoArrow)
+                UpdateScreenReticle(unit, reticle, cfg, guidOwner)
+            end
+        else
+            HideReticleFrame(reticle)
+            HideTheoArrow(theoArrow)
         end
     end
 
-    -- Priority: mouseover > target > focus
-    claim("mouseover", "mouseover")
-    claim("target",    "target")
-    claim("focus",     "focus")
+    -- FOCUS
+    do
+        local unit      = "focus"
+        local reticle   = Ret.frames.focus
+        local theoArrow = Ret.theoArrow.focus
+        local cfg       = Ret.GetReticleConfig("focus")
 
-    local tCfg = Ret.GetReticleConfig("target")
-    local fCfg = Ret.GetReticleConfig("focus")
-    local mCfg = Ret.GetReticleConfig("mouseover")
+        if IsValidUnit(unit) then
+            local rel = select(1, GetRelativeAngleAndDistance(unit))
+            if rel and abs(rel) > frontAngle then
+                HideReticleFrame(reticle)
+                UpdateTheoArrow(unit, "focus", theoArrow, guidOwner)
+            else
+                HideTheoArrow(theoArrow)
+                UpdateScreenReticle(unit, reticle, cfg, guidOwner)
+            end
+        else
+            HideReticleFrame(reticle)
+            HideTheoArrow(theoArrow)
+        end
+    end
 
-    UpdateReticleForUnit("target", Ret.frames.target, tCfg, guidOwner)
-    UpdateReticleForUnit("focus",  Ret.frames.focus,  fCfg, guidOwner)
-    UpdateMouseoverIndicator(Ret.frames.mouseover, mCfg, guidOwner)
+    -- MOUSEOVER: always world reticle, no Theo box
+    do
+        local cfg = Ret.GetReticleConfig("mouseover")
+        UpdateMouseoverIndicator(Ret.frames.mouseover, cfg, guidOwner)
+    end
 end
-
 
 local function OnNameplateAdded(_, event, unit)
     if event ~= "NAME_PLATE_UNIT_ADDED" then return end
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
-    if not plate then return end
-    HideNameplateArt(plate)
-    MuteNameplate(plate)
+    if not plate or not plate.UnitFrame then return end
+
+    local uf = plate.UnitFrame
+    if uf.healthBar then uf.healthBar:SetAlpha(0.0) end
+    if uf.castBar   then uf.castBar:SetAlpha(0.0)   end
+    if uf.name      then uf.name:SetAlpha(0.0)      end
 end
 
 function Ret.Init()
@@ -759,6 +946,7 @@ function Ret.Init()
 
     EnsureNameplateCVars()
     EnsureFrames()
+    EnsureTheoBox()
 
     driver = CreateFrame("Frame", "PE_AR_ReticleDriver", UIParent)
     driver:RegisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -766,22 +954,26 @@ function Ret.Init()
     driver:SetScript("OnUpdate", OnUpdate)
 end
 
-function Ret.ForceUpdate()
-    if driver then
-        OnUpdate(driver, UPDATE_INTERVAL)
-    else
-        Ret.Init()
-    end
-end
-
 ------------------------------------------------------
--- Editor integration stub (real UI in PE_ARReticleEditor.lua)
+-- Layout editor integration (SetEditorEnabled shim)
 ------------------------------------------------------
 
 function Ret.SetEditorEnabled(flag)
     flag = not not flag
-    if AR and AR.ReticleEditor and AR.ReticleEditor.SetEnabled then
-        AR.ReticleEditor.SetEnabled(flag)
+
+    if Ret.EditorUI and Ret.EditorUI.SetEnabled then
+        Ret.EditorUI.SetEnabled(flag)
+    end
+
+    if Ret.theoBox then
+        Ret.theoBox:SetAlpha(flag and 1 or 0)
+    end
+    if Ret.theoCenter then
+        if flag then
+            Ret.theoCenter:Show()
+        else
+            Ret.theoCenter:Hide()
+        end
     end
 end
 
