@@ -4,8 +4,11 @@
 ## Author: Tasu Copporclang
 ## Version: 1.0
 ## RequiredDeps: PersonaEngine
+## OptionalDeps: HereBeDragons
 ## IconTexture: Interface\AddOns\PersonaEngine\references\persona_brain_icon.tga
 ## SavedVariables: PersonaEngineAR_DB
+
+
 
 # Embedded libraries
 libs\LibStub\LibStub.lua
@@ -21,6 +24,7 @@ AR\PE_ARUnitPanel.lua
 AR\PE_ARReticles.lua
 AR\PE_ARReticleEditor.lua
 AR\PE_ARLayoutEditor.lua
+AR\PE_ARTheo.lua
 
 # AR HUD UI
 AR\UI\PE_UIARHUDSkin.lua
@@ -30,5 +34,8 @@ AR\UI\PE_UIARFocusPanel.lua
 AR\UI\PE_UIARMouseoverPanel.lua
 AR\UI\PE_UIARPetPanel.lua
 AR\UI\PE_UIARPlayerPanel.lua
+
+
+AR/PE_ARGoggles.lua
 
 # (no bindings, no tooltips for now)

@@ -32,10 +32,10 @@ local FRAME_NAMES = {
     "FocusFrameToT",
 
     -- Cast bars
-    "CastingBarFrame",
-    "PetCastingBarFrame",
-    "TargetFrameSpellBar",
-    "FocusFrameSpellBar",
+    -- "CastingBarFrame",
+    -- "PetCastingBarFrame",
+    -- "TargetFrameSpellBar",
+    -- "FocusFrameSpellBar",
 	
 	"NamePlate",
 }

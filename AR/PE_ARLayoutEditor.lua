@@ -154,6 +154,13 @@ local function HookFrameForEdit(regionName, frame)
                 end
             end)
         end
+		
+		        -- In layout edit mode, make Theo's box visibly tinted.
+        if frame.SetBackdropColor then
+            frame:SetBackdropColor(0, 0, 0, 0.4)
+            frame:SetBackdropBorderColor(0.2, 1.0, 0.7, 0.9)
+        end
+
 
         return
     end
@@ -197,6 +204,13 @@ local function UnhookFrame(frame)
     if handle then
         handle:Hide()
     end
+	
+	    -- If this is Theo's box, fade its backdrop out when leaving layout mode.
+    if frame.GetName and frame:GetName() == "PE_AR_TheoBox" and frame.SetBackdropColor then
+        frame:SetBackdropColor(0, 0, 0, 0.0)
+        frame:SetBackdropBorderColor(0, 0, 0, 0.0)
+    end
+
 
     Editor.original[frame] = nil
 end
