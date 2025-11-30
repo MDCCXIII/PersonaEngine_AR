@@ -216,3 +216,13 @@ AR.TargetPanel = UnitPanel.Create{
         subtitle = "Select a target to scan",
     },
 }
+
+------------------------------------------------------
+-- Module registration
+------------------------------------------------------
+
+PE.LogInit(MODULE)
+PE.RegisterModule("AR Target Panel", {
+    name  = "AR Target Panel",
+    class = "AR HUD",
+})

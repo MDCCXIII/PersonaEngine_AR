@@ -97,3 +97,13 @@ AR.FocusPanel = UnitPanel.Create{
         subtitle = "Set a focus to scan",
     },
 }
+
+------------------------------------------------------
+-- Module registration
+------------------------------------------------------
+
+PE.LogInit(MODULE)
+PE.RegisterModule("AR Focus Panel", {
+    name  = "AR Focus Panel",
+    class = "AR HUD",
+})

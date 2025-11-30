@@ -96,3 +96,13 @@ AR.MouseoverPanel = UnitPanel.Create{
         subtitle = "Hover a unit to scan",
     },
 }
+
+------------------------------------------------------
+-- Module registration
+------------------------------------------------------
+
+PE.LogInit(MODULE)
+PE.RegisterModule("AR Mouseover Panel", {
+    name  = "AR Mouseover Panel",
+    class = "AR HUD",
+})

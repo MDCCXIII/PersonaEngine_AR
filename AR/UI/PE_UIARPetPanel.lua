@@ -25,7 +25,7 @@ if not PE or type(PE) ~= "table" then
 end
 
 -- DEBUG: confirm file actually loaded
-print("|cff20ff80[PersonaEngine_AR] AR Pet Panel module loaded|r")
+-- print("|cff20ff80[PersonaEngine_AR] AR Pet Panel module loaded|r")
 
 PE.AR = PE.AR or {}
 local AR = PE.AR
