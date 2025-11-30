@@ -1,4 +1,5 @@
 local MODULE = "AR Core"
+
 -- ##################################################
 -- AR/PE_ARCore.lua
 -- PersonaEngine: Augmented Reality HUD core
@@ -19,16 +20,18 @@ local AR = PE.AR
 -- State
 ------------------------------------------------------
 
-AR.enabled     = true    -- runtime toggle for all AR visuals
+AR.enabled     = true   -- runtime toggle for all AR visuals
 AR.initialized = false
-AR.expanded    = false   -- compact vs expanded HUD (Alt mode, etc.)
+AR.expanded    = false  -- compact vs expanded HUD (Alt mode, etc.)
 
 ------------------------------------------------------
 -- Local helpers
 ------------------------------------------------------
 
 local function SafeCall(fn, ...)
-    if type(fn) ~= "function" then return end
+    if type(fn) ~= "function" then
+        return
+    end
     local ok, err = pcall(fn, ...)
     if not ok and geterrorhandler then
         geterrorhandler()(err)
@@ -71,17 +74,18 @@ function AR.SetEnabled(flag)
     end
 end
 
-
 function AR.IsExpanded()
     return AR.expanded and AR.enabled and AR.initialized
 end
 
 function AR.SetExpanded(flag)
     AR.expanded = not not flag
+
     -- Let HUD react if it cares about compact vs expanded
     if AR.HUD and AR.HUD.Refresh then
         AR.HUD.Refresh("EXPAND_TOGGLE")
     end
+
     if AR.TargetPanel and AR.TargetPanel.ForceUpdate then
         AR.TargetPanel.ForceUpdate()
     end
@@ -89,9 +93,13 @@ end
 
 -- For other systems to query a “snapshot” of what AR sees
 function AR.GetCurrentSnapshot()
-    if not AR.IsEnabled() or not AR.Scanner or not AR.Scanner.BuildSnapshot then
+    if not AR.IsEnabled()
+        or not AR.Scanner
+        or not AR.Scanner.BuildSnapshot
+    then
         return nil
     end
+
     return AR.Scanner.BuildSnapshot()
 end
 
@@ -109,7 +117,7 @@ local function OnEvent(self, event, ...)
     if event == "PLAYER_LOGIN" then
         -- Initialize scanner + HUD lazily
         SafeCall(AR.Scanner and AR.Scanner.Init)
-        SafeCall(AR.HUD     and AR.HUD.Init)
+        SafeCall(AR.HUD and AR.HUD.Init)
         SafeCall(AR.TargetPanel and AR.TargetPanel.Init)
         SafeCall(AR.Reticle and AR.Reticle.Init)
 
@@ -121,15 +129,23 @@ local function OnEvent(self, event, ...)
 
     -- Pass other events down to scanner/HUD as they care
     SafeCall(AR.Scanner and AR.Scanner.OnEvent, event, ...)
-    SafeCall(AR.HUD     and AR.HUD.OnEvent, event, ...)
+    SafeCall(AR.HUD and AR.HUD.OnEvent, event, ...)
 end
 
 local function CreateEventFrame()
-    if frame then return end
+    if frame then
+        return
+    end
 
-    frame = CreateFrame("Frame", "PE_ARCoreFrame", UIParent)
+    -- Core AR event dispatcher
+    frame = CreateFrame("Frame", "PE_AR_EventFrame", UIParent)
+    frame:SetFrameStrata("LOW")
+    frame:SetFrameLevel(0)
+
     frame:SetScript("OnEvent", OnEvent)
-    frame:RegisterEvent("PLAYER_LOGIN") -- Scanner/HUD can ask ARCore to register more via helper
+    frame:RegisterEvent("PLAYER_LOGIN")
+
+    -- Scanner/HUD can ask ARCore to register more via helper
 end
 
 function AR.RegisterEvent(evt)

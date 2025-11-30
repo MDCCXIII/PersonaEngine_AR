@@ -1,4 +1,5 @@
 local MODULE = "AR Scanner"
+
 -- ##################################################
 -- AR/PE_ARScanner.lua
 -- Unit + tooltip scanner for AR HUD
@@ -8,12 +9,14 @@ local MODULE = "AR Scanner"
 
 local PE = _G.PE
 local AR = PE and PE.AR
-if not AR then return end
+if not AR then
+    return
+end
 
 AR.Scanner = AR.Scanner or {}
 local Scanner = AR.Scanner
 
-Scanner.units   = Scanner.units or {}
+Scanner.units   = Scanner.units   or {}
 Scanner.tooltip = Scanner.tooltip or nil
 
 ------------------------------------------------------
@@ -24,8 +27,13 @@ local function EnsureTooltip()
     if Scanner.tooltip then
         return Scanner.tooltip
     end
-    local tt = CreateFrame("GameTooltip", "PE_ARHiddenTooltip", UIParent, "GameTooltipTemplate")
+
+    -- Hidden scanning tooltip
+    local tt = CreateFrame("GameTooltip", "PE_AR_HiddenTooltip", UIParent, "GameTooltipTemplate")
+    tt:SetFrameStrata("LOW")
+    tt:SetFrameLevel(0)
     tt:SetOwner(UIParent, "ANCHOR_NONE")
+
     Scanner.tooltip = tt
     return tt
 end
@@ -41,7 +49,7 @@ local function BuildTooltipForUnit(unitID, data)
         subHeader = nil,
         lines     = {},
         tags      = {
-            isPlayer     = UnitIsPlayer(unitID) or false,
+            isPlayer    = UnitIsPlayer(unitID) or false,
             isQuestGiver = false,
             isVendor     = false,
             isTrainer    = false,
@@ -49,8 +57,9 @@ local function BuildTooltipForUnit(unitID, data)
     }
 
     for i = 1, 6 do
-        local fs = _G["PE_ARHiddenTooltipTextLeft" .. i]
+        local fs   = _G["PE_AR_HiddenTooltipTextLeft" .. i]
         local text = fs and fs:GetText()
+
         if text and text ~= "" then
             if i == 1 then
                 tooltip.header = text
@@ -58,9 +67,16 @@ local function BuildTooltipForUnit(unitID, data)
                 tooltip.subHeader = text
             else
                 table.insert(tooltip.lines, text)
-                if text:find("Quest") then tooltip.tags.isQuestGiver = true end
-                if text:find("Vendor") or text:find("Merchant") then tooltip.tags.isVendor = true end
-                if text:find("Trainer") then tooltip.tags.isTrainer = true end
+
+                if text:find("Quest") then
+                    tooltip.tags.isQuestGiver = true
+                end
+                if text:find("Vendor") or text:find("Merchant") then
+                    tooltip.tags.isVendor = true
+                end
+                if text:find("Trainer") then
+                    tooltip.tags.isTrainer = true
+                end
             end
         end
     end
@@ -101,9 +117,12 @@ local function EstimateDistance(unitID)
     -- Uses UnitPosition() which works anywhere except some instances
     local px, py = UnitPosition("player")
     local ux, uy = UnitPosition(unitID)
-    if not px or not ux then return nil end
+    if not px or not ux then
+        return nil
+    end
+
     local dx, dy = ux - px, uy - py
-    return math.sqrt(dx*dx + dy*dy)
+    return math.sqrt(dx * dx + dy * dy)
 end
 
 ------------------------------------------------------
@@ -119,7 +138,9 @@ local function CountBuffs(unit)
     local count = 0
     for i = 1, 40 do
         local name = UnitBuff(unit, i)
-        if not name then break end
+        if not name then
+            break
+        end
         count = count + 1
     end
     return count
@@ -134,12 +155,13 @@ local function CountDebuffs(unit)
     local count = 0
     for i = 1, 40 do
         local name = UnitDebuff(unit, i)
-        if not name then break end
+        if not name then
+            break
+        end
         count = count + 1
     end
     return count
 end
-
 
 ------------------------------------------------------
 -- Scanner lifecycle
@@ -165,7 +187,9 @@ function Scanner.OnEvent(event, ...)
         Scanner:UpdateUnit("target")
 
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
-        if UnitExists("mouseover") then Scanner:UpdateUnit("mouseover") end
+        if UnitExists("mouseover") then
+            Scanner:UpdateUnit("mouseover")
+        end
 
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         Scanner:UpdateUnit(...)
@@ -175,9 +199,13 @@ function Scanner.OnEvent(event, ...)
 
     elseif event == "MODIFIER_STATE_CHANGED" then
         local key, down = ...
+
         if key == "LALT" or key == "RALT" or key == "ALT" then
             AR.expanded = (down == 1) or IsAltKeyDown()
-            if AR.HUD and AR.HUD.Refresh then AR.HUD.Refresh("MODIFIER") end
+
+            if AR.HUD and AR.HUD.Refresh then
+                AR.HUD.Refresh("MODIFIER")
+            end
         end
 
     elseif event:find("UNIT_SPELLCAST") then
@@ -196,10 +224,14 @@ end
 ------------------------------------------------------
 
 function Scanner:UpdateUnit(unitID)
-    if not unitID or not UnitExists(unitID) then return end
+    if not unitID or not UnitExists(unitID) then
+        return
+    end
 
     local guid = UnitGUID(unitID)
-    if not guid then return end
+    if not guid then
+        return
+    end
 
     local data = Scanner.units[guid] or {}
 
@@ -218,23 +250,22 @@ function Scanner:UpdateUnit(unitID)
     data.creature   = UnitCreatureType(unitID)
     data.faction    = UnitFactionGroup(unitID)
     data.isPet      = UnitIsUnit(unitID, "pet") or UnitIsOtherPlayersPet(unitID)
-    --data.isTarget    = UnitIsUnit(unitID, "target")
-    --data.isMouseover = UnitIsUnit(unitID, "mouseover")
-
-    data.isBoss  = (data.classif == "worldboss")
-    data.isElite = (data.classif == "elite" or data.classif == "rareelite")
+    -- data.isTarget   = UnitIsUnit(unitID, "target")
+    -- data.isMouseover= UnitIsUnit(unitID, "mouseover")
+    data.isBoss     = (data.classif == "worldboss")
+    data.isElite    = (data.classif == "elite" or data.classif == "rareelite")
 
     --------------------------------------------------
     -- Health & power
     --------------------------------------------------
-    data.health    = UnitHealth(unitID)
+    data.health   = UnitHealth(unitID)
     data.healthMax = UnitHealthMax(unitID)
-    data.hpPct     = (data.healthMax > 0) and (data.health / data.healthMax) or 0
+    data.hpPct    = (data.healthMax > 0) and (data.health / data.healthMax) or 0
 
     data.power    = UnitPower(unitID)
     data.powerMax = UnitPowerMax(unitID)
     data.powerType = select(2, UnitPowerType(unitID))
-    data.powerPct = (data.powerMax > 0) and (data.power / data.powerMax) or 0
+    data.powerPct  = (data.powerMax > 0) and (data.power / data.powerMax) or 0
 
     --------------------------------------------------
     -- Threat / PvP / flags
@@ -257,7 +288,6 @@ function Scanner:UpdateUnit(unitID)
         data.isBattlePet = false
     end
 
-
     --------------------------------------------------
     -- Auras (summary only)
     --------------------------------------------------
@@ -278,7 +308,7 @@ function Scanner:UpdateUnit(unitID)
     --------------------------------------------------
     -- Tooltip
     --------------------------------------------------
-    data.tooltip  = BuildTooltipForUnit(unitID, data)
+    data.tooltip = BuildTooltipForUnit(unitID, data)
     data.lastSeen = GetTime()
 
     Scanner.units[guid] = data
@@ -301,29 +331,41 @@ function Scanner.BuildSnapshot()
     local now         = GetTime()
 
     -- Who is actually target / mouseover *right now*?
-    local targetGUID = UnitExists("target")    and UnitGUID("target")    or nil
+    local targetGUID = UnitExists("target") and UnitGUID("target") or nil
     local mouseGUID  = UnitExists("mouseover") and UnitGUID("mouseover") or nil
 
     for guid, data in pairs(Scanner.units) do
         -- Fresh flags based on GUID, not cached booleans
-        local isTargetNow    = (targetGUID and guid == targetGUID)    or false
-        local isMouseoverNow = (mouseGUID  and guid == mouseGUID)     or false
+        local isTargetNow    = (targetGUID and guid == targetGUID) or false
+        local isMouseoverNow = (mouseGUID and guid == mouseGUID) or false
 
         -- Age-out, but never drop current target/mouseover just for being old
         local tooOld = data.lastSeen and ((now - data.lastSeen) > 30)
+
         if tooOld and not isTargetNow and not isMouseoverNow then
             Scanner.units[guid] = nil
         else
             local score = 0
 
-            if isTargetNow      then score = score + 300 end
-            if isMouseoverNow   then score = score + 200 end
-            if data.hostile     then score = score + 30  end
-            if data.isBoss      then score = score + 40  end
-            if data.isElite     then score = score + 15  end
+            if isTargetNow then
+                score = score + 300
+            end
+            if isMouseoverNow then
+                score = score + 200
+            end
+            if data.hostile then
+                score = score + 30
+            end
+            if data.isBoss then
+                score = score + 40
+            end
+            if data.isElite then
+                score = score + 15
+            end
             if data.isCastingInterruptible then
                 score = score + 20
             end
+
             if data.level > playerLevel + 2 then
                 score = score + 5
             elseif data.level < playerLevel - 3 then
@@ -331,15 +373,15 @@ function Scanner.BuildSnapshot()
             end
 
             table.insert(snapshot, {
-                guid        = guid,
-                data        = data,
+                guid       = guid,
+                data       = data,
+
                 -- force unit tokens for live focus points
-                unit        = isTargetNow and "target"
-                               or (isMouseoverNow and "mouseover"
-                                   or data.unit),
-                isTarget    = isTargetNow,
-                isMouseover = isMouseoverNow,
-                score       = score,
+                unit       = isTargetNow and "target"
+                             or (isMouseoverNow and "mouseover" or data.unit),
+                isTarget   = isTargetNow,
+                isMouseover= isMouseoverNow,
+                score      = score,
             })
         end
     end
@@ -350,9 +392,6 @@ function Scanner.BuildSnapshot()
 
     return snapshot
 end
-
-
-
 
 PE.LogInit(MODULE)
 if PE.RegisterModule then

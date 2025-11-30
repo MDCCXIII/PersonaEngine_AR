@@ -13,13 +13,12 @@ if not PE or type(PE) ~= "table" then
 end
 
 PE.AR = PE.AR or {}
-local AR = PE.AR
-
-AR.Layout = AR.Layout or {}
-local Layout = AR.Layout
+local AR      = PE.AR
+AR.Layout     = AR.Layout or {}
+local Layout  = AR.Layout
 
 local CreateFrame = _G.CreateFrame
-local UIParent   = _G.UIParent
+local UIParent    = _G.UIParent
 
 ------------------------------------------------------
 -- SavedVariables root
@@ -27,6 +26,7 @@ local UIParent   = _G.UIParent
 -- PersonaEngine_AR.toc:
 -- ## SavedVariables: PersonaEngineAR_DB
 ------------------------------------------------------
+
 local function GetLayoutDB()
     _G.PersonaEngineAR_DB = _G.PersonaEngineAR_DB or {}
 
@@ -43,95 +43,95 @@ end
 Layout.defaults = Layout.defaults or {
     -- Right side stack: focus (top), target, mouseover, pets
     targetPanel = {
-        point    = "RIGHT",
-        relPoint = "RIGHT",
-        x        = -60,
-        y        = 0,
-        width    = 260,
-        height   = 300,
+        point   = "RIGHT",
+        relPoint= "RIGHT",
+        x       = -60,
+        y       = 0,
+        width   = 260,
+        height  = 300,
     },
 
     focusPanel = {
-        point    = "RIGHT",
-        relPoint = "RIGHT",
-        x        = -60,
-        y        = 220,
-        width    = 260,
-        height   = 210,
+        point   = "RIGHT",
+        relPoint= "RIGHT",
+        x       = -60,
+        y       = 220,
+        width   = 260,
+        height  = 210,
     },
 
     mouseoverPanel = {
-        point    = "RIGHT",
-        relPoint = "RIGHT",
-        x        = -60,
-        y        = -220,
-        width    = 260,
-        height   = 180,
+        point   = "RIGHT",
+        relPoint= "RIGHT",
+        x       = -60,
+        y       = -220,
+        width   = 260,
+        height  = 180,
     },
 
     targetPetPanel = {
-        point    = "RIGHT",
-        relPoint = "RIGHT",
-        x        = -330,
-        y        = -40,
-        width    = 220,
-        height   = 140,
+        point   = "RIGHT",
+        relPoint= "RIGHT",
+        x       = -330,
+        y       = -40,
+        width   = 220,
+        height  = 140,
     },
 
     focusPetPanel = {
-        point    = "RIGHT",
-        relPoint = "RIGHT",
-        x        = -330,
-        y        = 180,
-        width    = 220,
-        height   = 140,
+        point   = "RIGHT",
+        relPoint= "RIGHT",
+        x       = -330,
+        y       = 180,
+        width   = 220,
+        height  = 140,
     },
 
     -- Left side: player + pet dossiers
     playerPanel = {
-        point    = "LEFT",
-        relPoint = "LEFT",
-        x        = 60,
-        y        = 60,
-        width    = 260,
-        height   = 210,
+        point   = "LEFT",
+        relPoint= "LEFT",
+        x       = 60,
+        y       = 60,
+        width   = 260,
+        height  = 210,
     },
 
     playerPetPanel = {
-        point    = "LEFT",
-        relPoint = "LEFT",
-        x        = 60,
-        y        = -160,
-        width    = 220,
-        height   = 140,
+        point   = "LEFT",
+        relPoint= "LEFT",
+        x       = 60,
+        y       = -160,
+        width   = 220,
+        height  = 140,
     },
 
     minimapPanel = {
-        point    = "TOPLEFT",
-        relPoint = "TOPLEFT",
-        x        = 40,
-        y        = -40,
-        width    = 220,
-        height   = 220,
+        point   = "TOPLEFT",
+        relPoint= "TOPLEFT",
+        x       = 40,
+        y       = -40,
+        width   = 220,
+        height  = 220,
     },
 
     actionsPanel = {
-        point    = "BOTTOM",
-        relPoint = "BOTTOM",
-        x        = 0,
-        y        = 120,
-        width    = 260,
-        height   = 80,
+        point   = "BOTTOM",
+        relPoint= "BOTTOM",
+        x       = 0,
+        y       = 120,
+        width   = 260,
+        height  = 80,
     },
 
     -- Theo Box: default region for Theo arrows
     ["Theo Box"] = {
-        point    = "CENTER",
-        relPoint = "CENTER",
-        x        = 0,
-        y        = -220,
-        width    = 260,
-        height   = 140,
+        point   = "CENTER",
+        relPoint= "CENTER",
+        x       = 0,
+        y       = -220,
+        width   = 260,
+        height  = 140,
     },
 }
 
@@ -142,7 +142,7 @@ Layout.defaults = Layout.defaults or {
 Layout.registered = Layout.registered or {}
 
 -- Optional opts:
---   opts.deferAttach = true -> register but do NOT auto-attach yet
+-- opts.deferAttach = true -> register but do NOT auto-attach yet
 function Layout.Register(regionName, frame, opts)
     if not regionName or not frame then
         return
@@ -192,18 +192,23 @@ local function MergeDefaults(regionName)
     if not cfg.point then
         cfg.point = "CENTER"
     end
+
     if not cfg.relPoint then
         cfg.relPoint = cfg.point
     end
+
     if not cfg.width then
         cfg.width = 200
     end
+
     if not cfg.height then
         cfg.height = 100
     end
+
     if type(cfg.x) ~= "number" then
         cfg.x = 0
     end
+
     if type(cfg.y) ~= "number" then
         cfg.y = 0
     end
@@ -227,7 +232,7 @@ function Layout.Set(regionName, cfg)
         return
     end
 
-    local db = GetLayoutDB()
+    local db   = GetLayoutDB()
     db[regionName] = db[regionName] or {}
 
     local dest = db[regionName]
@@ -237,7 +242,7 @@ function Layout.Set(regionName, cfg)
 end
 
 -- Optional opts:
---   opts.noSize = true -> don't touch width/height
+-- opts.noSize = true -> don't touch width/height
 function Layout.Attach(frame, regionName, opts)
     if not frame or not regionName then
         return
@@ -272,12 +277,12 @@ function Layout.SaveFromFrame(regionName, frame)
     end
 
     local cfg = {
-        point    = point,
-        relPoint = relPoint or point,
-        x        = x or 0,
-        y        = y or 0,
-        width    = frame:GetWidth(),
-        height   = frame:GetHeight(),
+        point   = point,
+        relPoint= relPoint or point,
+        x       = x or 0,
+        y       = y or 0,
+        width   = frame:GetWidth(),
+        height  = frame:GetHeight(),
     }
 
     Layout.Set(regionName, cfg)
@@ -301,7 +306,9 @@ end
 -- after UI reload / relog.
 ------------------------------------------------------
 
-local driver = CreateFrame("Frame")
+local driver = CreateFrame("Frame", "PE_AR_LayoutDriver")
+driver:SetFrameStrata("LOW")
+driver:SetFrameLevel(0)
 driver:RegisterEvent("PLAYER_LOGIN")
 driver:SetScript("OnEvent", function()
     Layout.ReloadAll()

@@ -19,25 +19,35 @@ local AR = PE.AR
 AR.HUD = AR.HUD or {}
 local HUD = AR.HUD
 
-HUD.lastTargetGUID  = nil
-HUD.lastApplyTime   = 0
-HUD.hideGraceWindow = 0.2  -- seconds to wait before hiding on “no data”
+HUD.lastTargetGUID    = nil
+HUD.lastApplyTime     = 0
+HUD.hideGraceWindow   = 0.2   -- seconds to wait before hiding on “no data”
 
-local MAX_FRAMES = 0 -- 1= only target HUD
+local MAX_FRAMES = 0          -- 1 = only target HUD
 
 -- Set this to false if you ever want Blizzard nameplates visible again.
 local HIDE_BASE_NAMEPLATES = true
 
 HUD.Regions = HUD.Regions or {}
 
-local function CreateRegion(name, point, relPoint, x, y, width, height)
-    if HUD.Regions[name] then return HUD.Regions[name] end
+------------------------------------------------------
+-- Region helpers
+------------------------------------------------------
 
-    local f = CreateFrame("Frame", "PE_ARHUD_" .. name, UIParent)
+local function CreateRegion(name, point, relPoint, x, y, width, height)
+    if HUD.Regions[name] then
+        return HUD.Regions[name]
+    end
+
+    local frameName = "PE_AR_HUDRegion_" .. name
+    local f = CreateFrame("Frame", frameName, UIParent)
+
     f:SetIgnoreParentAlpha(true)
     f:SetIgnoreParentScale(true)
-    f:SetFrameStrata("HIGH")
-    f:SetFrameLevel(40)
+
+    -- Strata / level rules
+    f:SetFrameStrata("LOW")
+    f:SetFrameLevel(0)
 
     f:SetPoint(point, UIParent, relPoint, x, y)
     f:SetSize(width, height)
@@ -56,7 +66,6 @@ function HUD.CreateRegions()
     -- Left-hand status column (future self/pet/focus)
     CreateRegion("LEFT_STATUS", "LEFT", "LEFT", 120, 0, 420, 460)
 end
-
 
 ------------------------------------------------------
 -- Helper: always fetch the current skin table
@@ -105,7 +114,9 @@ local function ApplyHideAllBaseNameplates()
     end
 
     local plates = C_NamePlate.GetNamePlates()
-    if not plates then return end
+    if not plates then
+        return
+    end
 
     for _, plate in ipairs(plates) do
         HideBasePlateVisuals(plate)
@@ -117,10 +128,12 @@ end
 ------------------------------------------------------
 
 function HUD.Init()
-	if HUD.initialized then return end
+    if HUD.initialized then
+        return
+    end
 
     HUD.CreateRegions()
-	
+
     -- Frames come from HUDSkin
     ApplyHideAllBaseNameplates()
 
@@ -129,8 +142,8 @@ function HUD.Init()
     AR.RegisterEvent("UPDATE_MOUSEOVER_UNIT")
     AR.RegisterEvent("NAME_PLATE_UNIT_ADDED")
     AR.RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-	
-	HUD.initialized = true
+
+    HUD.initialized = true
 end
 
 function HUD.OnEvent(event, ...)
@@ -156,7 +169,6 @@ end
 
 function HUD.Refresh(reason)
     local Skin = GetSkin()
-
     if not (AR.IsEnabled and AR.IsEnabled()) or not Skin or not Skin.GetFrame then
         HUD.HideAll()
         return
@@ -168,7 +180,7 @@ function HUD.Refresh(reason)
         return
     end
 
-    local snapshot = AR.GetCurrentSnapshot and AR.GetCurrentSnapshot()
+    local snapshot   = AR.GetCurrentSnapshot and AR.GetCurrentSnapshot()
     local targetGUID = UnitGUID("target")
 
     -- Try to find the snapshot entry for our current target.
@@ -193,12 +205,11 @@ function HUD.Refresh(reason)
     -- Single HUD frame for target only
     local SkinNow = GetSkin()
     local frame   = SkinNow and SkinNow.GetFrame and SkinNow.GetFrame(1)
-
     if not frame then
         return
     end
 
-    local unit  = "target"               -- FORCE: always use real target unit
+    local unit  = "target" -- FORCE: always use real target unit
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
     local data  = targetEntry.data
 
@@ -217,10 +228,6 @@ function HUD.Refresh(reason)
 
     SkinNow.Apply(frame, plate, targetEntry, ctx)
 end
-
-
-
-
 
 ----------------------------------------------------
 -- Module registration

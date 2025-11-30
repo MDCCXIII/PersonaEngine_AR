@@ -572,11 +572,13 @@ end
 -- Event driver
 ------------------------------------------------------
 
-local ev = CreateFrame("Frame")
+local ev = CreateFrame("Frame", "PE_AR_GogglesEvents", UIParent)
+ev:SetFrameStrata("LOW")
+ev:SetFrameLevel(0)
+
 ev:RegisterEvent("PLAYER_ENTERING_WORLD")
 ev:RegisterEvent("UNIT_AURA")
 ev:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-
 -- Transmog changes do NOT change item IDs, so we also listen for
 -- transmog-specific events when available.
 ev:RegisterEvent("TRANSMOGRIFY_SUCCESS")
@@ -590,6 +592,7 @@ ev:SetScript("OnEvent", function(self, event, arg1)
     local visorOn = IsVisorOn()
     ApplyVisorState(visorOn)
 end)
+
 
 ------------------------------------------------------
 -- Slash command for debugging / forcing re-eval

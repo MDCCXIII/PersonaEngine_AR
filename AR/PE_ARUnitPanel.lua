@@ -3,8 +3,8 @@
 -- Generic “unit dossier” panel factory for AR HUD.
 --
 -- Used to build:
---   * Target, Focus, Mouseover dossiers
---   * Pet dossiers (player pet, etc.)
+-- * Target, Focus, Mouseover dossiers
+-- * Pet dossiers (player pet, etc.)
 -- Everything shares the same visual language; behaviour is driven
 -- entirely by config.
 -- ##################################################
@@ -24,8 +24,12 @@ AR.UnitPanel = AR.UnitPanel or {}
 ------------------------------------------------------
 
 local function Clamp01(v)
-    if v < 0 then return 0 end
-    if v > 1 then return 1 end
+    if v < 0 then
+        return 0
+    end
+    if v > 1 then
+        return 1
+    end
     return v
 end
 
@@ -42,10 +46,10 @@ local function DefaultCastLine(unit)
         return ""
     end
 
-    local dur = (endTime and startTime) and (endTime - startTime) / 1000 or 0
+    local dur  = (endTime and startTime) and (endTime - startTime) / 1000 or 0
     local flag = notInterruptible and "|cffff4040LOCKED|r" or "|cff20ff50INTERRUPT|r"
 
-    return string.format("CAST: %s  (%.1fs)  [%s]", name, dur, flag)
+    return string.format("CAST: %s (%.1fs) [%s]", name, dur, flag)
 end
 
 local function DefaultHP(unit)
@@ -96,55 +100,65 @@ end
 -- Factory
 ------------------------------------------------------
 -- opts:
---   unitToken    : "target"/"focus"/"mouseover"/"pet"/etc
---   layoutKey    : key in AR.Layout (e.g. "targetPanel")
---   moduleKey    : logging key ("AR Target Panel")
---   moduleName   : shown in PE modules list
---   size         : { w = 260, h = 300 }
---   modelHeight  : height of 3D model region
---   showPowerBar : bool (pets can turn this off if desired)
---   nameFunc     : function(unit) -> string
---   buildLine1   : function(unit) -> string (e.g. level line)
---   buildLine2   : function(unit) -> string or nil (e.g. status)
---   accentColor  : function(unit) -> r,g,b
---   castLineFunc : optional function(unit) -> string
---   poseFunc     : optional function(unit, model)
---   noUnitText   : { title = "...", subtitle = "..." }
+--   unitToken   : "target"/"focus"/"mouseover"/"pet"/etc
+--   layoutKey   : key in AR.Layout (e.g. "targetPanel")
+--   moduleKey   : logging key ("AR Target Panel")
+--   moduleName  : shown in PE modules list
+--   size        : { w = 260, h = 300 }
+--   modelHeight : height of 3D model region
+--   showPowerBar: bool (pets can turn this off if desired)
+--   nameFunc    : function(unit) -> string
+--   buildLine1  : function(unit) -> string (e.g. level line)
+--   buildLine2  : function(unit) -> string or nil (e.g. status)
+--   accentColor : function(unit) -> r,g,b
+--   castLineFunc: optional function(unit) -> string
+--   poseFunc    : optional function(unit, model)
+--   noUnitText  : { title = "...", subtitle = "..." }
 --
 function AR.UnitPanel.Create(opts)
     local unitToken   = opts.unitToken
     local layoutKey   = opts.layoutKey
-    local moduleKey   = opts.moduleKey or ("AR "..unitToken.." Panel")
+    local moduleKey   = opts.moduleKey or ("AR " .. unitToken .. " Panel")
     local moduleName  = opts.moduleName or moduleKey
     local size        = opts.size or { w = 260, h = 300 }
     local modelHeight = opts.modelHeight or 220
     local showPower   = opts.showPowerBar ~= false
 
-    local nameFunc    = opts.nameFunc     or DefaultName
-    local line1Func   = opts.buildLine1   or function() return "" end
-    local line2Func   = opts.buildLine2   -- can be nil
-    local accentFunc  = opts.accentColor  or DefaultAccent
-    local castFunc    = opts.castLineFunc or DefaultCastLine
-    local poseFunc    = opts.poseFunc
+    local nameFunc  = opts.nameFunc or DefaultName
+    local line1Func = opts.buildLine1 or function() return "" end
+    local line2Func = opts.buildLine2 -- can be nil
 
+    local accentFunc = opts.accentColor or DefaultAccent
+    local castFunc   = opts.castLineFunc or DefaultCastLine
+    local poseFunc   = opts.poseFunc
 
-    local noUnitText  = opts.noUnitText or {
+    local noUnitText = opts.noUnitText or {
         title    = "No Target",
         subtitle = "Select a target to scan",
     }
 
-    local Panel = {}
-    Panel.unitToken = unitToken
+    local Panel       = {}
+    Panel.unitToken   = unitToken
 
     --------------------------------------------------
     -- Frame creation
     --------------------------------------------------
+
     local function CreatePanelFrame()
         if Panel.frame then
             return Panel.frame
         end
 
-        local f = CreateFrame("Frame", opts.frameName or nil, UIParent)
+        -- Build a suffix we can reuse for child names
+        local nameSuffix = (layoutKey or unitToken or "Panel")
+        nameSuffix = tostring(nameSuffix):gsub("%s+", "")
+
+        -- Main panel frame
+        local frameName = opts.frameName or ("PE_AR_UnitPanel_" .. nameSuffix)
+        local f = CreateFrame("Frame", frameName, UIParent)
+        f:SetFrameStrata("LOW")
+        f:SetFrameLevel(0)
+
         Panel.frame = f
 
         local Layout = GetLayout()
@@ -165,7 +179,10 @@ function AR.UnitPanel.Create(opts)
             Layout.Register(layoutKey, f, { deferAttach = true })
         end
 
-        -- Background + grid
+        --------------------------------------------------
+        -- Background + grid (textures; inherit frame strata/level)
+        --------------------------------------------------
+
         local bg = f:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
         bg:SetColorTexture(0, 0, 0, 0.55)
@@ -178,7 +195,7 @@ function AR.UnitPanel.Create(opts)
         Panel.inner = inner
 
         Panel.gridLines = Panel.gridLines or {}
-        local gridCols = 6
+        local gridCols  = 6
         for i = 1, gridCols do
             local line = Panel.gridLines[i]
             if not line then
@@ -207,7 +224,10 @@ function AR.UnitPanel.Create(opts)
             line:SetHeight(1)
         end
 
+        --------------------------------------------------
         -- Accent + borders
+        --------------------------------------------------
+
         local accent = f:CreateTexture(nil, "BORDER")
         accent:SetWidth(3)
         accent:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
@@ -229,14 +249,17 @@ function AR.UnitPanel.Create(opts)
         bottomLine:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, -1)
         Panel.bottomLine = bottomLine
 
-        -- Scanline
+        --------------------------------------------------
+        -- Scanline (texture on same frame)
+        --------------------------------------------------
+
         local scan = f:CreateTexture(nil, "ARTWORK")
         scan:SetColorTexture(0.9, 0.95, 1.0, 0.22)
         scan:SetPoint("LEFT", f, "LEFT", 2, 0)
         scan:SetPoint("RIGHT", f, "RIGHT", -2, 0)
         scan:SetHeight(14)
         scan:SetBlendMode("ADD")
-        Panel.scanline = scan
+        Panel.scanline   = scan
         Panel.scanOffset = 0
 
         f:SetScript("OnUpdate", function(self, elapsed)
@@ -251,16 +274,19 @@ function AR.UnitPanel.Create(opts)
             Panel.scanline:SetPoint("RIGHT", self, "RIGHT", -2, y)
         end)
 
-        -- Text: name and lines
+        --------------------------------------------------
+        -- Text: name and lines (fontstrings)
+        --------------------------------------------------
+
         local nameFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Med1")
         nameFS:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -6)
-        nameFS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+        nameFS:SetPoint("RIGHT",   f, "RIGHT",   -8, 0)
         nameFS:SetJustifyH("LEFT")
         Panel.nameFS = nameFS
 
         local line1FS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
         line1FS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, -2)
-        line1FS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+        line1FS:SetPoint("RIGHT",   f,      "RIGHT",      -8, 0)
         line1FS:SetJustifyH("LEFT")
         Panel.line1FS = line1FS
 
@@ -268,18 +294,24 @@ function AR.UnitPanel.Create(opts)
         if line2Func then
             local line2FS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
             line2FS:SetPoint("TOPLEFT", line1FS, "BOTTOMLEFT", 0, -2)
-            line2FS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+            line2FS:SetPoint("RIGHT",   f,       "RIGHT",      -8, 0)
             line2FS:SetJustifyH("LEFT")
             Panel.line2FS = line2FS
-            anchorUnder = line2FS
+            anchorUnder   = line2FS
         else
-            anchorUnder = line1FS
+            anchorUnder   = line1FS
         end
 
-        -- Model frame
-        local modelFrame = CreateFrame("Frame", nil, f)
-        modelFrame:SetPoint("TOPLEFT", anchorUnder, "BOTTOMLEFT", 0, -8)
-        modelFrame:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -8)
+        --------------------------------------------------
+        -- Model frame + model
+        --------------------------------------------------
+
+        local modelFrameName = "PE_AR_UnitPanelModel_" .. nameSuffix
+        local modelFrame     = CreateFrame("Frame", modelFrameName, f)
+        modelFrame:SetFrameStrata("LOW")
+        modelFrame:SetFrameLevel(1)
+        modelFrame:SetPoint("TOPLEFT",  anchorUnder, "BOTTOMLEFT", 0,  -8)
+        modelFrame:SetPoint("TOPRIGHT", f,           "TOPRIGHT",   -8, -8)
         modelFrame:SetHeight(modelHeight)
         Panel.modelFrame = modelFrame
 
@@ -288,15 +320,24 @@ function AR.UnitPanel.Create(opts)
         modelBG:SetColorTexture(0, 0, 0, 0.6)
         Panel.modelBG = modelBG
 
-        local model = CreateFrame("PlayerModel", nil, modelFrame)
+        local modelName = "PE_AR_UnitPanelModel3D_" .. nameSuffix
+        local model     = CreateFrame("PlayerModel", modelName, modelFrame)
+        model:SetFrameStrata("LOW")
+        model:SetFrameLevel(2)
         model:SetAllPoints()
         model:SetAlpha(0)
         Panel.model = model
 
+        --------------------------------------------------
         -- Bars & cast line
-        local hpBar = CreateFrame("StatusBar", nil, f)
+        --------------------------------------------------
+
+        local hpBarName = "PE_AR_UnitPanelHPBar_" .. nameSuffix
+        local hpBar     = CreateFrame("StatusBar", hpBarName, f)
+        hpBar:SetFrameStrata("LOW")
+        hpBar:SetFrameLevel(3)
         hpBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-        hpBar:SetPoint("TOPLEFT", modelFrame, "BOTTOMLEFT", 0, -8)
+        hpBar:SetPoint("TOPLEFT",  modelFrame, "BOTTOMLEFT",  0, -8)
         hpBar:SetPoint("TOPRIGHT", modelFrame, "BOTTOMRIGHT", 0, -8)
         hpBar:SetHeight(10)
         hpBar:SetMinMaxValues(0, 1)
@@ -314,9 +355,12 @@ function AR.UnitPanel.Create(opts)
         Panel.hpText = hpText
 
         if showPower then
-            local mpBar = CreateFrame("StatusBar", nil, f)
+            local mpBarName = "PE_AR_UnitPanelPowerBar_" .. nameSuffix
+            local mpBar     = CreateFrame("StatusBar", mpBarName, f)
+            mpBar:SetFrameStrata("LOW")
+            mpBar:SetFrameLevel(4)
             mpBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-            mpBar:SetPoint("TOPLEFT", hpBar, "BOTTOMLEFT", 0, -4)
+            mpBar:SetPoint("TOPLEFT",  hpBar, "BOTTOMLEFT",  0, -4)
             mpBar:SetPoint("TOPRIGHT", hpBar, "BOTTOMRIGHT", 0, -4)
             mpBar:SetHeight(8)
             mpBar:SetMinMaxValues(0, 1)
@@ -332,7 +376,7 @@ function AR.UnitPanel.Create(opts)
         local castFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
         local castAnchor = Panel.mpBar or hpBar
         castFS:SetPoint("TOPLEFT", castAnchor, "BOTTOMLEFT", 0, -6)
-        castFS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+        castFS:SetPoint("RIGHT",   f,          "RIGHT",      -8, 0)
         castFS:SetJustifyH("LEFT")
         castFS:SetText("")
         Panel.castFS = castFS
@@ -343,6 +387,7 @@ function AR.UnitPanel.Create(opts)
     --------------------------------------------------
     -- Update logic
     --------------------------------------------------
+
     function Panel.Update()
         local frame = CreatePanelFrame()
 
@@ -356,7 +401,6 @@ function AR.UnitPanel.Create(opts)
         end
 
         local unit = unitToken
-
         if not UnitExists(unit) then
             -- idle state
             Panel.nameFS:SetText(noUnitText.title or "")
@@ -368,10 +412,12 @@ function AR.UnitPanel.Create(opts)
             Panel.hpBar:SetMinMaxValues(0, 1)
             Panel.hpBar:SetValue(0)
             Panel.hpText:SetText("")
+
             if Panel.mpBar then
                 Panel.mpBar:SetMinMaxValues(0, 1)
                 Panel.mpBar:SetValue(0)
             end
+
             Panel.castFS:SetText("")
 
             if Panel.model then
@@ -407,7 +453,7 @@ function AR.UnitPanel.Create(opts)
         -- Power (if enabled)
         if Panel.mpBar then
             local mp, mpMax, mpPct = DefaultPower(unit)
-            local pr, pg, pb = DefaultPowerColor(unit)
+            local pr, pg, pb       = DefaultPowerColor(unit)
             Panel.mpBar:SetMinMaxValues(0, 1)
             Panel.mpBar:SetValue(mpPct)
             Panel.mpBar:SetStatusBarColor(pr, pg, pb)
@@ -437,6 +483,7 @@ function AR.UnitPanel.Create(opts)
     --------------------------------------------------
     -- Events
     --------------------------------------------------
+
     local eventFrame
 
     local function OnEvent(self, event, arg1)
@@ -446,33 +493,52 @@ function AR.UnitPanel.Create(opts)
 
         if event == "PLAYER_LOGIN" then
             Panel.Update()
+
         elseif event == "PLAYER_TARGET_CHANGED" and unitToken == "target" then
             Panel.Update()
+
         elseif event == "PLAYER_FOCUS_CHANGED" and unitToken == "focus" then
             Panel.Update()
+
         elseif event == "UPDATE_MOUSEOVER_UNIT" and unitToken == "mouseover" then
             Panel.Update()
-        elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH"
-            or event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER"
-            or event == "UNIT_DISPLAYPOWER" or event == "UNIT_FACTION" then
 
+        elseif event == "UNIT_HEALTH"
+            or event == "UNIT_MAXHEALTH"
+            or event == "UNIT_POWER_UPDATE"
+            or event == "UNIT_MAXPOWER"
+            or event == "UNIT_DISPLAYPOWER"
+            or event == "UNIT_FACTION"
+        then
             if arg1 == unitToken then
                 Panel.Update()
             end
+
         elseif event == "UNIT_PET" and unitToken == "pet" then
             -- player pet changed; just refresh
             Panel.Update()
-        elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+
+        elseif event == "PLAYER_REGEN_ENABLED"
+            or event == "PLAYER_REGEN_DISABLED"
+        then
             Panel.Update()
         end
     end
 
     function Panel.Init()
-        if eventFrame then return end
+        if eventFrame then
+            return
+        end
 
-        eventFrame = CreateFrame("Frame", nil, UIParent)
+        local nameSuffix = (layoutKey or unitToken or "Panel")
+        nameSuffix       = tostring(nameSuffix):gsub("%s+", "")
+
+        local eventFrameName = "PE_AR_UnitPanelEvents_" .. nameSuffix
+        eventFrame = CreateFrame("Frame", eventFrameName, UIParent)
+        eventFrame:SetFrameStrata("LOW")
+        eventFrame:SetFrameLevel(0)
+
         eventFrame:SetScript("OnEvent", OnEvent)
-
         eventFrame:RegisterEvent("PLAYER_LOGIN")
         eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")

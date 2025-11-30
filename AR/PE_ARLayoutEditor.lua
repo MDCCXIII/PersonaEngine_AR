@@ -17,14 +17,14 @@ end
 PE.AR = PE.AR or {}
 local AR = PE.AR
 
-AR.Layout = AR.Layout or {}
-local Layout = AR.Layout
+AR.Layout      = AR.Layout or {}
+local Layout   = AR.Layout
 if not Layout then
     return
 end
 
 AR.LayoutEditor = AR.LayoutEditor or {}
-local Editor = AR.LayoutEditor
+local Editor    = AR.LayoutEditor
 
 ------------------------------------------------------
 -- State
@@ -45,20 +45,32 @@ local function CreateHandle(regionName, frame)
 
     local handle = Editor.handles[frame]
     if not handle then
-        handle = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+        -- Build a stable name for the handle
+        local safeName = tostring(regionName or "Region"):gsub("%s+", "")
+        local handleName = "PE_AR_LayoutHandle_" .. safeName
+
+        handle = CreateFrame("Frame", handleName, frame, "BackdropTemplate")
         Editor.handles[frame] = handle
+
+        -- Strata / level discipline
+        handle:SetFrameStrata("LOW")
+        local baseLevel = frame:GetFrameLevel() or 0
+        if baseLevel < 0 then
+            baseLevel = 0
+        end
+        if baseLevel >= 50 then
+            baseLevel = 49
+        end
+        handle:SetFrameLevel(baseLevel + 1)
 
         if regionName == "Theo Box" then
             -- Only a thin top bar is draggable/clickable; interior stays click-through.
-            handle:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+            handle:SetPoint("TOPLEFT",  frame, "TOPLEFT",  0, 0)
             handle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
             handle:SetHeight(20)
         else
             handle:SetAllPoints(frame)
         end
-
-        handle:SetFrameStrata("FULLSCREEN_DIALOG")
-        handle:SetFrameLevel(frame:GetFrameLevel() + 20)
 
         -- For most regions, the handle draws the border.
         -- For Theo Box, the real box has the border; handle is invisible.
@@ -89,8 +101,8 @@ local function CreateHandle(regionName, frame)
 
             local step    = 8 * delta
             local minSize = 40
+            local w, h    = parent:GetSize()
 
-            local w, h = parent:GetSize()
             if IsAltKeyDown() then
                 -- Alt: adjust vertical size only
                 h = math.max(minSize, h + step)
@@ -111,7 +123,10 @@ local function CreateHandle(regionName, frame)
         handle:Hide()
     end
 
-    handle.label:SetText(regionName or "AR Region")
+    if handle.label then
+        handle.label:SetText(regionName or "AR Region")
+    end
+
     return handle
 end
 
@@ -132,7 +147,8 @@ local function HookFrameForEdit(regionName, frame)
     }
     Editor.original[frame] = info
 
-    -- Special case: Theo Box should be mostly click-through, with only the border draggable.
+    -- Special case: Theo Box should be mostly click-through,
+    -- with only the border draggable.
     if regionName == "Theo Box" then
         frame:SetMovable(true) -- allow moving, but keep it mouse-transparent
 
@@ -154,13 +170,6 @@ local function HookFrameForEdit(regionName, frame)
                 end
             end)
         end
-		
-		        -- In layout edit mode, make Theo's box visibly tinted.
-        if frame.SetBackdropColor then
-            frame:SetBackdropColor(0, 0, 0, 0.4)
-            frame:SetBackdropBorderColor(0.2, 1.0, 0.7, 0.9)
-        end
-
 
         return
     end
@@ -169,11 +178,9 @@ local function HookFrameForEdit(regionName, frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
-
     frame:SetScript("OnDragStart", function(f)
         f:StartMoving()
     end)
-
     frame:SetScript("OnDragStop", function(f)
         f:StopMovingOrSizing()
         Layout.SaveFromFrame(regionName, f)
@@ -198,19 +205,12 @@ local function UnhookFrame(frame)
     frame:SetMovable(info.movable or false)
     frame:EnableMouse(info.mouseEnabled or false)
     frame:SetScript("OnDragStart", info.dragStart)
-    frame:SetScript("OnDragStop", info.dragStop)
+    frame:SetScript("OnDragStop",  info.dragStop)
 
     local handle = Editor.handles[frame]
     if handle then
         handle:Hide()
     end
-	
-	    -- If this is Theo's box, fade its backdrop out when leaving layout mode.
-    if frame.GetName and frame:GetName() == "PE_AR_TheoBox" and frame.SetBackdropColor then
-        frame:SetBackdropColor(0, 0, 0, 0.0)
-        frame:SetBackdropBorderColor(0, 0, 0, 0.0)
-    end
-
 
     Editor.original[frame] = nil
 end

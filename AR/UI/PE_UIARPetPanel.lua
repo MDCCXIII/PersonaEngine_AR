@@ -3,9 +3,9 @@
 -- PersonaEngine AR: Player Pet Info Panel
 --
 -- Smaller dossier for the *player's pet*:
---   Name/level/creature type on top
---   3D model in the middle
---   HP bar + optional cast line underneath.
+--   - Name/level/creature type on top
+--   - 3D model in the middle
+--   - HP bar + optional cast line underneath.
 --
 -- Only visible while UnitExists("pet").
 -- ##################################################
@@ -16,8 +16,6 @@ local MODULE = "AR Pet Panel"
 local PET_WIDTH        = 150
 local PET_HEIGHT       = 160
 local PET_MODEL_HEIGHT = 90
-
-
 
 local PE = _G.PE
 if not PE or type(PE) ~= "table" then
@@ -42,8 +40,12 @@ local function GetLayout()
 end
 
 local function Clamp01(v)
-    if v < 0 then return 0 end
-    if v > 1 then return 1 end
+    if v < 0 then
+        return 0
+    end
+    if v > 1 then
+        return 1
+    end
     return v
 end
 
@@ -53,8 +55,8 @@ local function ColorForPet()
 end
 
 local function BuildPetLine(unit)
-    local level = UnitLevel(unit) or -1
-    local ctype = UnitCreatureType(unit) or "Mechanical"
+    local level  = UnitLevel(unit) or -1
+    local ctype  = UnitCreatureType(unit) or "Mechanical"
     local pieces = {}
 
     if level <= 0 then
@@ -82,10 +84,10 @@ local function BuildCastLine(unit)
         return ""
     end
 
-    local dur = (endTime and startTime) and (endTime - startTime) / 1000 or 0
+    local dur  = (endTime and startTime) and (endTime - startTime) / 1000 or 0
     local flag = notInterruptible and "|cffff4040LOCKED|r" or "|cff20ff50INTERRUPT|r"
 
-    return ("CAST: %s  (%.1fs)  [%s]"):format(name, dur, flag)
+    return ("CAST: %s (%.1fs) [%s]"):format(name, dur, flag)
 end
 
 -- Central gate for "is AR HUD enabled?"
@@ -108,8 +110,13 @@ local function CreatePanelFrame()
         return Panel.frame
     end
 
+    -- Main pet panel frame
     local f = CreateFrame("Frame", "PE_AR_PetPanel", UIParent)
     Panel.frame = f
+
+    -- Strata / level for root
+    f:SetFrameStrata("LOW")
+    f:SetFrameLevel(0)
 
     -- Try layout attach *first* (so editor can move it),
     -- but always enforce a sane on-screen default after.
@@ -118,7 +125,7 @@ local function CreatePanelFrame()
         Layout.Attach(f, "petPanel")
     end
 
-        -- If layout didn't set anything meaningful, force a default anchor
+    -- If layout didn't set anything meaningful, force a default anchor
     local point = f:GetPoint(1)
     if not point then
         f:SetPoint("RIGHT", UIParent, "RIGHT", -60, -300)
@@ -126,8 +133,6 @@ local function CreatePanelFrame()
 
     -- Always enforce compact pet size; layout only moves it
     f:SetSize(PET_WIDTH, PET_HEIGHT)
-
-
     f:SetAlpha(0)
     f:EnableMouse(false)
 
@@ -135,7 +140,10 @@ local function CreatePanelFrame()
         Layout.Register("petPanel", f, { deferAttach = true })
     end
 
+    --------------------------------------------------
     -- Background + inner panel
+    --------------------------------------------------
+
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(0, 0, 0, 0.55)
@@ -147,17 +155,21 @@ local function CreatePanelFrame()
     inner:SetColorTexture(0.0, 0.35, 0.35, 0.35)
     Panel.inner = inner
 
+    --------------------------------------------------
     -- Grid
+    --------------------------------------------------
+
     Panel.gridLines = Panel.gridLines or {}
-    local gridCols = 6
+    local gridCols  = 6
     for i = 1, gridCols do
         local line = Panel.gridLines[i]
         if not line then
             line = f:CreateTexture(nil, "BACKGROUND")
             Panel.gridLines[i] = line
         end
+
         line:SetColorTexture(0.1, 0.9, 0.8, 0.16)
-		local x = (i / (gridCols + 1)) * PET_WIDTH
+        local x = (i / (gridCols + 1)) * PET_WIDTH
         line:SetPoint("TOPLEFT", f, "TOPLEFT", x, -2)
         line:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", x, 2)
         line:SetWidth(1)
@@ -171,6 +183,7 @@ local function CreatePanelFrame()
             line = f:CreateTexture(nil, "BACKGROUND")
             Panel.gridRows[i] = line
         end
+
         line:SetColorTexture(0.1, 0.9, 0.8, 0.14)
         local y = -(i / (gridRows + 1)) * PET_HEIGHT
         line:SetPoint("LEFT", f, "LEFT", 2, y)
@@ -178,7 +191,10 @@ local function CreatePanelFrame()
         line:SetHeight(1)
     end
 
+    --------------------------------------------------
     -- Accent spine + borders
+    --------------------------------------------------
+
     local accent = f:CreateTexture(nil, "BORDER")
     accent:SetWidth(3)
     accent:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
@@ -200,14 +216,17 @@ local function CreatePanelFrame()
     bottomLine:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, -1)
     Panel.bottomLine = bottomLine
 
+    --------------------------------------------------
     -- Scanline
+    --------------------------------------------------
+
     local scan = f:CreateTexture(nil, "ARTWORK")
     scan:SetColorTexture(0.9, 0.95, 1.0, 0.22)
-    scan:SetPoint("LEFT", f, "LEFT", 2, 0)
+    scan:SetPoint("LEFT",  f, "LEFT",  2,  0)
     scan:SetPoint("RIGHT", f, "RIGHT", -2, 0)
     scan:SetHeight(12)
     scan:SetBlendMode("ADD")
-    Panel.scanline = scan
+    Panel.scanline   = scan
     Panel.scanOffset = 0
 
     f:SetScript("OnUpdate", function(self, elapsed)
@@ -218,28 +237,36 @@ local function CreatePanelFrame()
         end
         local y = Panel.scanOffset - (h / 2)
         Panel.scanline:ClearAllPoints()
-        Panel.scanline:SetPoint("LEFT", self, "LEFT", 2, y)
+        Panel.scanline:SetPoint("LEFT",  self, "LEFT",  2,  y)
         Panel.scanline:SetPoint("RIGHT", self, "RIGHT", -2, y)
     end)
 
+    --------------------------------------------------
     -- Text
+    --------------------------------------------------
+
     local nameFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Med1")
     nameFS:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -6)
-    nameFS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+    nameFS:SetPoint("RIGHT",   f, "RIGHT",   -8, 0)
     nameFS:SetJustifyH("LEFT")
     Panel.nameFS = nameFS
 
     local lineFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
     lineFS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, -2)
-    lineFS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+    lineFS:SetPoint("RIGHT",   f,      "RIGHT",      -8, 0)
     lineFS:SetJustifyH("LEFT")
     Panel.lineFS = lineFS
 
+    --------------------------------------------------
     -- Model
+    --------------------------------------------------
+
     local modelFrame = CreateFrame("Frame", "PE_AR_PetModelFrame", f)
-    modelFrame:SetPoint("TOPLEFT", lineFS, "BOTTOMLEFT", 0, -8)
-    modelFrame:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -8)
+    modelFrame:SetPoint("TOPLEFT",  lineFS, "BOTTOMLEFT", 0, -8)
+    modelFrame:SetPoint("TOPRIGHT", f,      "TOPRIGHT",   -8, -8)
     modelFrame:SetHeight(PET_MODEL_HEIGHT)
+    modelFrame:SetFrameStrata("LOW")
+    modelFrame:SetFrameLevel(1)
     Panel.modelFrame = modelFrame
 
     local modelBG = modelFrame:CreateTexture(nil, "BACKGROUND")
@@ -250,16 +277,23 @@ local function CreatePanelFrame()
     local model = CreateFrame("PlayerModel", "PE_AR_PetModel", modelFrame)
     model:SetAllPoints()
     model:SetAlpha(0)
+    model:SetFrameStrata("LOW")
+    model:SetFrameLevel(2)
     Panel.model = model
 
+    --------------------------------------------------
     -- HP bar
-    local hpBar = CreateFrame("StatusBar", nil, f)
+    --------------------------------------------------
+
+    local hpBar = CreateFrame("StatusBar", "PE_AR_PetHPBar", f)
     hpBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-    hpBar:SetPoint("TOPLEFT", modelFrame, "BOTTOMLEFT", 0, -8)
+    hpBar:SetPoint("TOPLEFT",  modelFrame, "BOTTOMLEFT",  0, -8)
     hpBar:SetPoint("TOPRIGHT", modelFrame, "BOTTOMRIGHT", 0, -8)
     hpBar:SetHeight(10)
     hpBar:SetMinMaxValues(0, 1)
     hpBar:SetValue(0)
+    hpBar:SetFrameStrata("LOW")
+    hpBar:SetFrameLevel(1)
     Panel.hpBar = hpBar
 
     local hpBG = hpBar:CreateTexture(nil, "BACKGROUND")
@@ -272,10 +306,13 @@ local function CreatePanelFrame()
     hpText:SetJustifyH("CENTER")
     Panel.hpText = hpText
 
+    --------------------------------------------------
     -- Cast line (optional flavour)
+    --------------------------------------------------
+
     local castFS = f:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
     castFS:SetPoint("TOPLEFT", hpBar, "BOTTOMLEFT", 0, -6)
-    castFS:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+    castFS:SetPoint("RIGHT",   f,     "RIGHT",      -8, 0)
     castFS:SetJustifyH("LEFT")
     castFS:SetText("")
     Panel.castFS = castFS
@@ -301,7 +338,6 @@ function Panel.Update()
     end
 
     local unit = "pet"
-
     if not UnitExists(unit) then
         -- Hide completely when there's no pet out
         frame:SetAlpha(0)
@@ -326,7 +362,7 @@ function Panel.Update()
     local hp    = UnitHealth(unit) or 0
     local hpMax = UnitHealthMax(unit) or 1
     local hpPct = (hpMax > 0) and (hp / hpMax) or 0
-    hpPct = Clamp01(hpPct)
+    hpPct       = Clamp01(hpPct)
 
     Panel.hpBar:SetMinMaxValues(0, 1)
     Panel.hpBar:SetValue(hpPct)
@@ -342,14 +378,12 @@ function Panel.Update()
             Panel.model:SetPortraitZoom(0.3)
             Panel.model:SetCamDistanceScale(1.20)
             Panel.model:SetPosition(0, 0, 0)
-
             if Panel.model.SetAnimation then
                 Panel.model:SetAnimation(0)
             end
             if Panel.model.SetPaused then
                 Panel.model:SetPaused(true)
             end
-
             Panel.model:SetAlpha(0.95)
         else
             Panel.model:SetAlpha(0)
@@ -384,9 +418,13 @@ local function OnEvent(self, event, arg1)
 end
 
 function Panel.Init()
-    if eventFrame then return end
+    if eventFrame then
+        return
+    end
 
     eventFrame = CreateFrame("Frame", "PE_AR_PetPanelEvents", UIParent)
+    eventFrame:SetFrameStrata("LOW")
+    eventFrame:SetFrameLevel(0)
     eventFrame:SetScript("OnEvent", OnEvent)
 
     eventFrame:RegisterEvent("PLAYER_LOGIN")

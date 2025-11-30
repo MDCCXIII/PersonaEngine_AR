@@ -1,4 +1,5 @@
 local MODULE = "AR HUD Skin"
+
 -- ##################################################
 -- AR/UI/PE_UIARHUDSkin.lua
 -- Visual “skin” for the AR HUD.
@@ -18,24 +19,26 @@ end
 PE.AR = PE.AR or {}
 local AR = PE.AR
 
-AR.HUDSkin = AR.HUDSkin or {}
-local Skin = AR.HUDSkin
-
-Skin.frames = Skin.frames or {}
+AR.HUDSkin   = AR.HUDSkin or {}
+local Skin   = AR.HUDSkin
+Skin.frames  = Skin.frames or {}
 
 ------------------------------------------------------
 -- Utility helpers
 ------------------------------------------------------
 
 local function Clamp01(v)
-    if v < 0 then return 0 end
-    if v > 1 then return 1 end
+    if v < 0 then
+        return 0
+    end
+    if v > 1 then
+        return 1
+    end
     return v
 end
 
 local function ColorForHealth(p)
-    p = Clamp01(p or 0)
-    -- green -> yellow -> red
+    p = Clamp01(p or 0) -- green -> yellow -> red
     local r, g
     if p >= 0.5 then
         -- 0.5-1.0: yellow to green
@@ -89,7 +92,6 @@ local function BuildDetailText(data)
     if not line1 and tt.lines and tt.lines[1] then
         line1 = tt.lines[1]
     end
-
     local line2 = tt.lines and tt.lines[2] or nil
 
     if data.isCasting and data.currentCastName then
@@ -114,21 +116,27 @@ end
 ------------------------------------------------------
 
 local function CreateARFrame(index)
-    local name = "PE_ARHUD_Frame" .. index
-    local f = CreateFrame("Frame", name, UIParent)
+    -- Root HUD frame
+    local name = "PE_AR_HUDFrame" .. index
+    local f    = CreateFrame("Frame", name, UIParent)
     f.peIsARHUD = true
-    f:SetSize(130, 100)  -- a bit more compact
-	f:SetIgnoreParentAlpha(true)  -- <== key lines
-    f:SetIgnoreParentScale(true)  -- <== key lines
+    f:SetSize(130, 100) -- a bit more compact
+    f:SetIgnoreParentAlpha(true)
+    f:SetIgnoreParentScale(true)
+    f:SetFrameStrata("LOW")
+    f:SetFrameLevel(0)
     f:Hide()
 
     --------------------------------------------------
     -- Central ring backing
     --------------------------------------------------
-    local center = CreateFrame("Frame", nil, f)
-	center:SetSize(75, 75)
-	-- move it *above* the nameplate center
-	center:SetPoint("CENTER", f, "CENTER", 0, 12)
+
+    local centerName = "PE_AR_HUDCenter" .. index
+    local center     = CreateFrame("Frame", centerName, f)
+    center:SetSize(75, 75) -- move it *above* the nameplate center
+    center:SetPoint("CENTER", f, "CENTER", 0, 12)
+    center:SetFrameStrata("LOW")
+    center:SetFrameLevel(f:GetFrameLevel() + 1)
     f.center = center
 
     local ring = center:CreateTexture(nil, "ARTWORK")
@@ -136,25 +144,29 @@ local function CreateARFrame(index)
     ring:SetTexture("Interface\\BUTTONS\\UI-Quickslot")
     ring:SetAlpha(0.25)
     f.ring = ring
-	
-	local inner = center:CreateTexture(nil, "ARTWORK")
-	inner:SetPoint("CENTER")
-	inner:SetSize(50, 50)
-	inner:SetTexture("Interface\\BUTTONS\\UI-Quickslot2")
-	inner:SetVertexColor(0, 1, 1, 0.25)  -- teal-ish glow
-	f.innerRing = inner
+
+    local inner = center:CreateTexture(nil, "ARTWORK")
+    inner:SetPoint("CENTER")
+    inner:SetSize(50, 50)
+    inner:SetTexture("Interface\\BUTTONS\\UI-Quickslot2")
+    inner:SetVertexColor(0, 1, 1, 0.25) -- teal-ish glow
+    f.innerRing = inner
 
     --------------------------------------------------
     -- Left vertical bar (Health)
     --------------------------------------------------
-    local healthBar = CreateFrame("StatusBar", nil, center)
-    healthBar:SetSize(8,70)
-	healthBar:ClearAllPoints()
-	healthBar:SetPoint("CENTER", center, "CENTER", -36, 0)
+
+    local healthBarName = "PE_AR_HUDHealthBar" .. index
+    local healthBar     = CreateFrame("StatusBar", healthBarName, center)
+    healthBar:SetSize(8, 70)
+    healthBar:ClearAllPoints()
+    healthBar:SetPoint("CENTER", center, "CENTER", -36, 0)
     healthBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
     healthBar:SetMinMaxValues(0, 1)
     healthBar:SetValue(1)
     healthBar:SetOrientation("VERTICAL")
+    healthBar:SetFrameStrata("LOW")
+    healthBar:SetFrameLevel(center:GetFrameLevel() + 1)
     f.healthBar = healthBar
 
     local healthBG = healthBar:CreateTexture(nil, "BACKGROUND")
@@ -165,14 +177,18 @@ local function CreateARFrame(index)
     --------------------------------------------------
     -- Right vertical bar (Power)
     --------------------------------------------------
-    local powerBar = CreateFrame("StatusBar", nil, center)
-    powerBar:SetSize(8,70)
-	powerBar:ClearAllPoints()
-	powerBar:SetPoint("CENTER", center, "CENTER", 36, 0)
+
+    local powerBarName = "PE_AR_HUDPowerBar" .. index
+    local powerBar     = CreateFrame("StatusBar", powerBarName, center)
+    powerBar:SetSize(8, 70)
+    powerBar:ClearAllPoints()
+    powerBar:SetPoint("CENTER", center, "CENTER", 36, 0)
     powerBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
     powerBar:SetMinMaxValues(0, 1)
     powerBar:SetValue(1)
     powerBar:SetOrientation("VERTICAL")
+    powerBar:SetFrameStrata("LOW")
+    powerBar:SetFrameLevel(center:GetFrameLevel() + 1)
     f.powerBar = powerBar
 
     local powerBG = powerBar:CreateTexture(nil, "BACKGROUND")
@@ -183,6 +199,7 @@ local function CreateARFrame(index)
     --------------------------------------------------
     -- Threat glow (outer ring-ish)
     --------------------------------------------------
+
     local threat = center:CreateTexture(nil, "BORDER")
     threat:SetSize(110, 100)
     threat:SetPoint("CENTER", center, "CENTER", 0, 0)
@@ -194,6 +211,7 @@ local function CreateARFrame(index)
     --------------------------------------------------
     -- LEFT data line: name + compact info
     --------------------------------------------------
+
     local leftLine = f:CreateTexture(nil, "ARTWORK")
     leftLine:SetColorTexture(0.8, 0.8, 0.8, 0.9)
     leftLine:SetSize(60, 2)
@@ -221,6 +239,7 @@ local function CreateARFrame(index)
     --------------------------------------------------
     -- RIGHT data line: expanded / tooltip info (Alt)
     --------------------------------------------------
+
     local rightLine = f:CreateTexture(nil, "ARTWORK")
     rightLine:SetColorTexture(0.8, 0.8, 0.8, 0.9)
     rightLine:SetSize(60, 2)
@@ -255,7 +274,6 @@ function Skin.GetFrame(index)
     return Skin.frames[index]
 end
 
-
 function Skin.Apply(frame, plate, entry, ctx)
     -- AR HUD visuals disabled: keep scanner + logic,
     -- but don't draw anything over nameplates.
@@ -264,129 +282,130 @@ function Skin.Apply(frame, plate, entry, ctx)
     end
 end
 
+--[[
+
 -- ctx = {
 --   role      = "target" | "mouseover",
 --   isPrimary = boolean,
 --   expanded  = boolean (Alt, and only for target)
 -- }
--- function Skin.Apply(frame, plate, entry, ctx)
-    -- local data = entry.data
-    -- if not frame or not plate or not data then
-        -- return
-    -- end
-	-- --UIFrameFadeIn(frame, 0.15, 0, 1)
 
-    -- frame:SetParent(plate)
-    -- frame:SetAllPoints(plate)
+function Skin.Apply(frame, plate, entry, ctx)
+    local data = entry.data
+    if not frame or not plate or not data then
+        return
+    end
 
-    -- --------------------------------------------------
-    -- -- Health bar
-    -- --------------------------------------------------
-    -- local hp = Clamp01(data.hpPct or 0)
-    -- frame.healthBar:SetValue(hp)
-    -- local hr, hg, hb = ColorForHealth(hp)
-    -- frame.healthBar:SetStatusBarColor(hr, hg, hb)
+    --UIFrameFadeIn(frame, 0.15, 0, 1)
+    frame:SetParent(plate)
+    frame:SetAllPoints(plate)
 
-    -- --------------------------------------------------
-    -- -- Power bar
-    -- --------------------------------------------------
-    -- local pp = Clamp01(data.powerPct or 0)
-    -- frame.powerBar:SetValue(pp)
-    -- local pr, pg, pb = ColorForPower(data)
-    -- frame.powerBar:SetStatusBarColor(pr, pg, pb)
+    --------------------------------------------------
+    -- Health bar
+    --------------------------------------------------
+    local hp = Clamp01(data.hpPct or 0)
+    frame.healthBar:SetValue(hp)
+    local hr, hg, hb = ColorForHealth(hp)
+    frame.healthBar:SetStatusBarColor(hr, hg, hb)
 
-    -- --------------------------------------------------
-    -- -- Threat glow
-    -- --------------------------------------------------
-    -- local threat = data.threat or 0
-    -- if threat and threat >= 2 then
-        -- local a = (threat == 3) and 0.8 or 0.5
-        -- frame.threatGlow:SetVertexColor(1.0, 0.2, 0.1, a)
-        -- frame.threatGlow:SetAlpha(a * 0.6)
-    -- else
-        -- frame.threatGlow:SetAlpha(0)
-    -- end
-	
-	-- local r, g, b = 0.3, 0.8, 1.0 -- default cyan
+    --------------------------------------------------
+    -- Power bar
+    --------------------------------------------------
+    local pp = Clamp01(data.powerPct or 0)
+    frame.powerBar:SetValue(pp)
+    local pr, pg, pb = ColorForPower(data)
+    frame.powerBar:SetStatusBarColor(pr, pg, pb)
 
-	-- if data.hostile then
-		-- r, g, b = 1.0, 0.2, 0.2
-	-- elseif not data.friendly then
-		-- r, g, b = 1.0, 0.8, 0.2
-	-- else
-		-- r, g, b = 0.2, 1.0, 0.4
-	-- end
+    --------------------------------------------------
+    -- Threat glow
+    --------------------------------------------------
+    local threat = data.threat or 0
+    if threat and threat >= 2 then
+        local a = (threat == 3) and 0.8 or 0.5
+        frame.threatGlow:SetVertexColor(1.0, 0.2, 0.1, a)
+        frame.threatGlow:SetAlpha(a * 0.6)
+    else
+        frame.threatGlow:SetAlpha(0)
+    end
 
-	-- -- Casting: override with bright “danger” yellow
-	-- if data.isCastingInterruptible then
-		-- r, g, b = 1.0, 1.0, 0.2
-		-- frame.ring:SetAlpha(0.35 + math.sin(GetTime()*7)*0.1)
-	-- end
+    local r, g, b = 0.3, 0.8, 1.0 -- default cyan
+    if data.hostile then
+        r, g, b = 1.0, 0.2, 0.2
+    elseif not data.friendly then
+        r, g, b = 1.0, 0.8, 0.2
+    else
+        r, g, b = 0.2, 1.0, 0.4
+    end
 
-	-- frame.ring:SetVertexColor(r, g, b, 0.35)
-	-- frame.ring:SetAlpha(0.15)
-	
-	-- frame:SetFrameStrata("HIGH") --Does this cause hud above menu's?
-	-- frame:SetFrameLevel(plate:GetFrameLevel() + 50)
+    -- Casting: override with bright “danger” yellow
+    if data.isCastingInterruptible then
+        r, g, b = 1.0, 1.0, 0.2
+        frame.ring:SetAlpha(0.35 + math.sin(GetTime()*7)*0.1)
+    end
 
-    -- --------------------------------------------------
-    -- -- Name + compact info (left)
-    -- --------------------------------------------------
-    -- frame.nameText:SetText(data.name or "Unknown Target")
-    -- frame.compactText:SetText(BuildCompactLine(data) or "")
+    frame.ring:SetVertexColor(r, g, b, 0.35)
+    frame.ring:SetAlpha(0.15)
 
-    -- --------------------------------------------------
-    -- -- Detail text (right) – only for target + expanded
-    -- --------------------------------------------------
-    -- if ctx.role == "target" and ctx.expanded then
-		-- frame.detailText:SetText(BuildDetailText(data) or "")
-		-- frame.rightLine:Show()
-		-- frame.rightElbow:Show()
-		-- frame.innerRing:SetVertexColor(0.2, 0.8, 1.0, 0.45) -- brighter inner ring
-	-- else
-		-- frame.detailText:SetText("")
-		-- frame.rightLine:Hide()
-		-- frame.rightElbow:Hide()
-		-- frame.innerRing:SetVertexColor(0, 1, 1, 0.25) -- dimmer
-	-- end
+    -- frame:SetFrameStrata("HIGH") -- Does this cause HUD above menus?
+    -- frame:SetFrameLevel(plate:GetFrameLevel() + 50)
 
+    --------------------------------------------------
+    -- Name + compact info (left)
+    --------------------------------------------------
+    frame.nameText:SetText(data.name or "Unknown Target")
+    frame.compactText:SetText(BuildCompactLine(data) or "")
 
-    -- --------------------------------------------------
-    -- -- Basic ring tint: hostile/friendly and casting
-    -- --------------------------------------------------
-    -- local r, g, b = 0.3, 0.8, 1.0 -- default soft cyan
-    -- if data.hostile then
-        -- r, g, b = 1.0, 0.2, 0.2
-    -- elseif not data.friendly then
-        -- r, g, b = 1.0, 0.8, 0.2
-    -- else
-        -- r, g, b = 0.2, 1.0, 0.4
-    -- end
+    --------------------------------------------------
+    -- Detail text (right) – only for target + expanded
+    --------------------------------------------------
+    if ctx.role == "target" and ctx.expanded then
+        frame.detailText:SetText(BuildDetailText(data) or "")
+        frame.rightLine:Show()
+        frame.rightElbow:Show()
+        frame.innerRing:SetVertexColor(0.2, 0.8, 1.0, 0.45) -- brighter
+    else
+        frame.detailText:SetText("")
+        frame.rightLine:Hide()
+        frame.rightElbow:Hide()
+        frame.innerRing:SetVertexColor(0, 1, 1, 0.25) -- dimmer
+    end
 
-    -- if data.isCastingInterruptible then
-        -- r, g, b = 1.0, 1.0, 0.2
-    -- end
+    --------------------------------------------------
+    -- Basic ring tint: hostile/friendly and casting
+    --------------------------------------------------
+    local r2, g2, b2 = 0.3, 0.8, 1.0 -- default soft cyan
+    if data.hostile then
+        r2, g2, b2 = 1.0, 0.2, 0.2
+    elseif not data.friendly then
+        r2, g2, b2 = 1.0, 0.8, 0.2
+    else
+        r2, g2, b2 = 0.2, 1.0, 0.4
+    end
 
-    -- frame.ring:SetVertexColor(r, g, b, 0.35)
-	
-	-- local dist = data.distance or 10
-	-- local scale = math.max(0.7, math.min(1.2, 1.2 - (dist * 0.03)))
-	-- frame:SetScale(scale)
-	-- frame:SetAlpha(1)   -- force full visibility for HUD
+    if data.isCastingInterruptible then
+        r2, g2, b2 = 1.0, 1.0, 0.2
+    end
 
-    -- frame:Show()
--- end
+    frame.ring:SetVertexColor(r2, g2, b2, 0.35)
+
+    local dist  = data.distance or 10
+    local scale = math.max(0.7, math.min(1.2, 1.2 - (dist * 0.03)))
+    frame:SetScale(scale)
+    frame:SetAlpha(1) -- force full visibility for HUD
+    frame:Show()
+end
+]]
 
 function Skin.Hide(frame)
     if frame then
-		--UIFrameFadeOut(frame, 0.15, 1, 0)
+        --UIFrameFadeOut(frame, 0.15, 1, 0)
         frame:Hide()
     end
 end
 
 function Skin.HideAll()
     for _, f in pairs(Skin.frames) do
-		--UIFrameFadeOut(f, 0.15, 1, 0)??
+        --UIFrameFadeOut(f, 0.15, 1, 0) ??
         f:Hide()
     end
 end

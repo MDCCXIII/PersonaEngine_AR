@@ -3,25 +3,25 @@
 -- PersonaEngine AR: Theo off-screen arrows
 --
 -- Self-contained layer:
---   * Uses AR.Reticles for:
---       - Theo arrow scales (target vs focus)
---   * Uses AR.Layout's "Theo Box" region for position/size
---   * Does NOT touch:
---       - range text ownership logic
---       - torso offsets
---       - scale sliders in AR Reticles
+-- * Uses AR.Reticles for:
+--   - Theo arrow scales (target vs focus)
+-- * Uses AR.Layout's "Theo Box" region for position/size
+-- * Does NOT touch:
+--   - range text ownership logic
+--   - torso offsets
+--   - scale sliders in AR Reticles
 --
 -- Rule:
---   * If unit's NAMEPLATE exists & is shown -> reticle
---   * Else                                 -> Theo arrow
---   * Angle (playerFacing -> unit) only affects arrow
---     position/rotation; if angle is missing we:
---       - suppress the arrow
---       - show a "TPS Signal Lost - Target/Focus is N yds away"
---         message on the Theo box that:
---           * updates its range text continuously for 3 seconds
---           * then fades out over 0.5s without further updates
---           * clears immediately if a reticle/arrow returns
+-- * If unit's NAMEPLATE exists & is shown -> reticle
+-- * Else -> Theo arrow
+-- * Angle (playerFacing -> unit) only affects arrow
+--   position/rotation; if angle is missing we:
+--   - suppress the arrow
+--   - show a "TPS Signal Lost - Target/Focus is N yds away"
+--     message on the Theo box that:
+--       * updates its range text continuously for 3 seconds
+--       * then fades out over 0.5s without further updates
+--       * clears immediately if a reticle/arrow returns
 -- ##################################################
 
 local MODULE = "AR Theo"
@@ -32,10 +32,9 @@ if not PE or type(PE) ~= "table" then
 end
 
 PE.AR = PE.AR or {}
-local AR    = PE.AR
-
-AR.Theo     = AR.Theo or {}
-local Theo  = AR.Theo
+local AR   = PE.AR
+AR.Theo    = AR.Theo or {}
+local Theo = AR.Theo
 
 local Layout -- filled at init
 local Ret    -- AR.Reticles
@@ -44,19 +43,21 @@ local Ret    -- AR.Reticles
 -- Libs / globals
 ------------------------------------------------------
 
-local LibStub           = _G.LibStub
-local HBD               = LibStub and LibStub("HereBeDragons-2.0", true) or nil
-local RangeCheck        = LibStub and LibStub("LibRangeCheck-3.0", true) or _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
+local LibStub = _G.LibStub
+local HBD     = LibStub and LibStub("HereBeDragons-2.0", true) or nil
+local RangeCheck = LibStub and LibStub("LibRangeCheck-3.0", true)
+    or _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
 
-local CreateFrame       = _G.CreateFrame
-local UIParent          = _G.UIParent
-local UnitExists        = _G.UnitExists
-local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
-local UnitPosition      = _G.UnitPosition
-local GetPlayerFacing   = _G.GetPlayerFacing
-local C_NamePlate       = _G.C_NamePlate
+local CreateFrame      = _G.CreateFrame
+local UIParent         = _G.UIParent
+local UnitExists       = _G.UnitExists
+local UnitIsDeadOrGhost= _G.UnitIsDeadOrGhost
+local UnitPosition     = _G.UnitPosition
+local GetPlayerFacing  = _G.GetPlayerFacing
+local C_NamePlate      = _G.C_NamePlate
 
-local cos, sin, atan2, abs, pi = math.cos, math.sin, math.atan2, math.abs, math.pi
+local cos, sin, atan2, abs, pi =
+    math.cos, math.sin, math.atan2, math.abs, math.pi
 
 local function IsAREnabled()
     if AR.IsEnabled and type(AR.IsEnabled) == "function" then
@@ -73,7 +74,6 @@ end
 ------------------------------------------------------
 
 local ADDON_NAME = ...
-
 local MEDIA_PATH = "Interface\\AddOns\\" .. (ADDON_NAME or "PersonaEngine_AR") .. "\\media\\"
 
 local TEXTURES = {
@@ -113,6 +113,7 @@ local function IsNameplateVisible(unit)
     if not C_NamePlate or not C_NamePlate.GetNamePlateForUnit then
         return false
     end
+
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     -- Alpha does NOT matter; you can zero it out.
     return plate ~= nil and plate:IsShown()
@@ -150,7 +151,6 @@ local function GetRelativeAngleToUnit(unit)
     if not dx or not dy then
         return nil
     end
-
     if dx == 0 and dy == 0 then
         return 0
     end
@@ -176,8 +176,8 @@ local function EnsureTheoBox()
     end
 
     local box = CreateFrame("Frame", "PE_AR_TheoBox", UIParent, "BackdropTemplate")
-    box:SetFrameStrata("FULLSCREEN_DIALOG")
-    box:SetFrameLevel(40)
+    box:SetFrameStrata("LOW")
+    box:SetFrameLevel(0)
     box:SetSize(260, 140)
     box:SetPoint("CENTER", UIParent, "CENTER", 0, -220)
 
@@ -213,9 +213,18 @@ local function EnsureArrow(which)
         return arrow
     end
 
-    arrow = CreateFrame("Frame", "PE_AR_TheoArrow_" .. which, box)
-    arrow:SetFrameStrata("FULLSCREEN_DIALOG")
-    arrow:SetFrameLevel(box:GetFrameLevel() + 1)
+    local name  = "PE_AR_TheoArrow_" .. which
+    arrow       = CreateFrame("Frame", name, box)
+    arrow:SetFrameStrata("LOW")
+    local baseLevel = box:GetFrameLevel() or 0
+    if baseLevel < 0 then
+        baseLevel = 0
+    end
+    if baseLevel >= 50 then
+        baseLevel = 49
+    end
+    arrow:SetFrameLevel(baseLevel + 1)
+
     arrow:SetSize(32, 32)
     arrow:SetIgnoreParentScale(true)
     arrow:SetIgnoreParentAlpha(true)
@@ -235,7 +244,6 @@ local function EnsureArrow(which)
 
     arrow:Hide()
     Theo.arrows[which] = arrow
-
     return arrow
 end
 
@@ -244,9 +252,11 @@ local function HideArrow(which)
     if not arrow then
         return
     end
+
     if arrow.distFS then
         arrow.distFS:SetText("")
     end
+
     arrow:Hide()
 end
 
@@ -258,7 +268,9 @@ Theo.noSignal = Theo.noSignal or {}
 
 local function EnsureNoSignalLabel(which)
     local box = EnsureTheoBox()
-    if not box then return nil end
+    if not box then
+        return nil
+    end
 
     local slot = Theo.noSignal[which]
     if slot and slot.label then
@@ -279,11 +291,11 @@ local function EnsureNoSignalLabel(which)
     fs:Hide()
 
     Theo.noSignal[which] = {
-        label         = fs,
-        unit          = nil,
-        liveTime      = 0,
-        fading        = false,
-        fadeRemaining = 0,
+        label        = fs,
+        unit         = nil,
+        liveTime     = 0,
+        fading       = false,
+        fadeRemaining= 0,
     }
 
     return fs
@@ -291,7 +303,9 @@ end
 
 local function ShowNoSignal(which, unit)
     local fs = EnsureNoSignalLabel(which)
-    if not fs then return end
+    if not fs then
+        return
+    end
 
     fs:SetAlpha(1)
     fs:Show()
@@ -302,11 +316,11 @@ local function ShowNoSignal(which, unit)
         Theo.noSignal[which] = slot
     end
 
-    slot.label         = fs
-    slot.unit          = unit
-    slot.liveTime      = 3.0  -- seconds of live updating
-    slot.fading        = false
-    slot.fadeRemaining = 0
+    slot.label        = fs
+    slot.unit         = unit
+    slot.liveTime     = 3.0 -- seconds of live updating
+    slot.fading       = false
+    slot.fadeRemaining= 0
 end
 
 local function ClearNoSignal(which)
@@ -319,10 +333,10 @@ local function ClearNoSignal(which)
     fs:SetText("")
     fs:Hide()
 
-    slot.unit          = nil
-    slot.liveTime      = 0
-    slot.fading        = false
-    slot.fadeRemaining = 0
+    slot.unit         = nil
+    slot.liveTime     = 0
+    slot.fading       = false
+    slot.fadeRemaining= 0
 end
 
 local function UpdateNoSignal(elapsed)
@@ -348,13 +362,17 @@ local function UpdateNoSignal(elapsed)
                     end
                 end
 
-                fs:SetText(string.format("TPS Signal Lost - %s is %s yds away", labelUnit, distText))
+                fs:SetText(string.format(
+                    "TPS Signal Lost - %s is %s yds away",
+                    labelUnit,
+                    distText
+                ))
                 fs:SetAlpha(1)
 
                 if slot.liveTime and slot.liveTime <= 0 then
                     -- Start fade phase
-                    slot.fading        = true
-                    slot.fadeRemaining = 0.5
+                    slot.fading       = true
+                    slot.fadeRemaining= 0.5
                 end
             else
                 -- Fade-out phase: no more updates, just fade alpha
@@ -363,13 +381,14 @@ local function UpdateNoSignal(elapsed)
                     local t     = slot.fadeRemaining
                     local alpha = math.max(0, t / 0.5)
                     fs:SetAlpha(alpha)
+
                     if t <= 0 then
                         fs:Hide()
                         fs:SetText("")
-                        slot.unit          = nil
-                        slot.liveTime      = 0
-                        slot.fading        = false
-                        slot.fadeRemaining = 0
+                        slot.unit         = nil
+                        slot.liveTime     = 0
+                        slot.fading       = false
+                        slot.fadeRemaining= 0
                     end
                 else
                     fs:Hide()
@@ -396,8 +415,8 @@ local function UpdateArrowForUnit(unit, which)
         return
     end
 
-    local reticleFrame = GetReticleFrameForUnit(unit)
-    local plateVisible = IsNameplateVisible(unit)
+    local reticleFrame  = GetReticleFrameForUnit(unit)
+    local plateVisible  = IsNameplateVisible(unit)
 
     -- If nameplate is visible, always prefer reticle mode.
     if plateVisible and reticleFrame and reticleFrame.Show then
@@ -425,8 +444,8 @@ local function UpdateArrowForUnit(unit, which)
         return
     end
 
-    local w, h   = box:GetWidth(), box:GetHeight()
-    local radius = math.min(w, h) * 0.5 - 18
+    local w, h  = box:GetWidth(), box:GetHeight()
+    local radius= math.min(w, h) * 0.5 - 18
     if radius < 10 then
         radius = 10
     end
@@ -504,8 +523,8 @@ end
 ------------------------------------------------------
 
 local driver
-local throttle = 0
-local INTERVAL = 0.02
+local throttle  = 0
+local INTERVAL  = 0.02
 
 local function OnUpdate(self, elapsed)
     -- Always drive "TPS Signal Lost" fade/update logic
@@ -535,6 +554,8 @@ function Theo.Init()
     EnsureArrow("focus")
 
     driver = CreateFrame("Frame", "PE_AR_TheoDriver", UIParent)
+    driver:SetFrameStrata("LOW")
+    driver:SetFrameLevel(0)
     driver:SetScript("OnUpdate", OnUpdate)
 
     Theo.initialized = true
@@ -544,7 +565,9 @@ end
 -- Event: init at PLAYER_LOGIN
 ------------------------------------------------------
 
-local evt = CreateFrame("Frame")
+local evt = CreateFrame("Frame", "PE_AR_TheoEventDriver", UIParent)
+evt:SetFrameStrata("LOW")
+evt:SetFrameLevel(0)
 evt:RegisterEvent("PLAYER_LOGIN")
 evt:SetScript("OnEvent", function()
     Theo.Init()
