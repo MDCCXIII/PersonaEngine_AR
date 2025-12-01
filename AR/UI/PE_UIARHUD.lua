@@ -19,11 +19,11 @@ local AR = PE.AR
 AR.HUD = AR.HUD or {}
 local HUD = AR.HUD
 
-HUD.lastTargetGUID    = nil
-HUD.lastApplyTime     = 0
-HUD.hideGraceWindow   = 0.2   -- seconds to wait before hiding on “no data”
+HUD.lastTargetGUID   = nil
+HUD.lastApplyTime    = 0
+HUD.hideGraceWindow  = 0.2 -- seconds to wait before hiding on "no data"
 
-local MAX_FRAMES = 0          -- 1 = only target HUD
+local MAX_FRAMES = 0  -- 1 = only target HUD
 
 -- Set this to false if you ever want Blizzard nameplates visible again.
 local HIDE_BASE_NAMEPLATES = true
@@ -41,7 +41,6 @@ local function CreateRegion(name, point, relPoint, x, y, width, height)
 
     local frameName = "PE_AR_HUDRegion_" .. name
     local f = CreateFrame("Frame", frameName, UIParent)
-
     f:SetIgnoreParentAlpha(true)
     f:SetIgnoreParentScale(true)
 
@@ -58,13 +57,13 @@ end
 
 function HUD.CreateRegions()
     -- Center reticle region: small-ish box around screen center
-    CreateRegion("CENTER_RETICLE", "CENTER", "CENTER", 0, 0, 400, 400)
+    CreateRegion("CENTER_RETICLE", "CENTER", "CENTER", 0,   0, 400, 400)
 
     -- Right-hand dossier column
-    CreateRegion("RIGHT_DOSSIER", "RIGHT", "RIGHT", -120, 0, 420, 460)
+    CreateRegion("RIGHT_DOSSIER",  "RIGHT",  "RIGHT", -120, 0, 420, 460)
 
     -- Left-hand status column (future self/pet/focus)
-    CreateRegion("LEFT_STATUS", "LEFT", "LEFT", 120, 0, 420, 460)
+    CreateRegion("LEFT_STATUS",    "LEFT",   "LEFT",  120,  0, 420, 460)
 end
 
 ------------------------------------------------------
@@ -73,6 +72,16 @@ end
 
 local function GetSkin()
     return AR.HUDSkin
+end
+
+local function AreVisualsAllowed()
+    if PE and PE.ARHUDVisualsAllowed ~= nil then
+        return PE.ARHUDVisualsAllowed
+    end
+    if AR and AR.HUDVisualsAllowed ~= nil then
+        return AR.HUDVisualsAllowed
+    end
+    return true
 end
 
 ------------------------------------------------------
@@ -133,7 +142,6 @@ function HUD.Init()
     end
 
     HUD.CreateRegions()
-
     -- Frames come from HUDSkin
     ApplyHideAllBaseNameplates()
 
@@ -169,7 +177,11 @@ end
 
 function HUD.Refresh(reason)
     local Skin = GetSkin()
-    if not (AR.IsEnabled and AR.IsEnabled()) or not Skin or not Skin.GetFrame then
+
+    if not (AR.IsEnabled and AR.IsEnabled())
+        or not AreVisualsAllowed()
+        or not Skin
+        or not Skin.GetFrame then
         HUD.HideAll()
         return
     end

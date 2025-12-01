@@ -3,22 +3,22 @@
 -- PersonaEngine AR: Visor (Goggles) cloaking system
 --
 -- Behavior:
---   * Determine "visor ON" from, in priority order:
---       1) Head transmog visual
---       2) Equipped head item
---       3) Player buff(s)
+-- * Determine "visor ON" from, in priority order:
+--   1) Head transmog visual
+--   2) Equipped head item
+--   3) Player buff(s)
 --
---   * When visor is OFF:
---       - For every frame discovered via EnumerateFrames():
---           * If its frame strata / level are BELOW a configurable cutoff,
---             and it is not explicitly exempt (nor a child of an exempt),
---             alpha is set to 0 and mouse clicks are disabled.
---           * Any frame whose name or ancestor matches FORCE_HIDE rules
---             is also hidden, regardless of strata/level.
+-- * When visor is OFF:
+--   - For every frame discovered via EnumerateFrames():
+--     * If its frame strata / level are BELOW a configurable cutoff,
+--       and it is not explicitly exempt (nor a child of an exempt),
+--       alpha is set to 0 and mouse clicks are disabled.
+--   * Any frame whose name or ancestor matches FORCE_HIDE rules
+--     is also hidden, regardless of strata/level.
 --
---   * When visor is ON:
---       - Any frame we previously modified has its original alpha restored
---         and its original mouse-enabled state restored.
+-- * When visor is ON:
+--   - Any frame we previously modified has its original alpha restored
+--     and its original mouse-enabled state restored.
 --
 -- We use SetAlpha (not Hide/Show) to avoid secure taint wherever possible.
 -- ##################################################
@@ -35,6 +35,24 @@ local AR = PE.AR
 
 AR.Goggles = AR.Goggles or {}
 local Goggles = AR.Goggles
+
+------------------------------------------------------
+-- AR HUD visuals flag (global toggle for AR code)
+------------------------------------------------------
+
+-- Global "are AR HUD visuals allowed to draw?" flag.
+-- This is what other AR modules should consult before forcing alpha to 1.
+-- Semantics:
+--   true  = visor ON  → visuals allowed
+--   false = visor OFF → visuals should not force themselves visible
+AR.HUDVisualsAllowed = (AR.HUDVisualsAllowed ~= false)
+PE.ARHUDVisualsAllowed = AR.HUDVisualsAllowed
+
+local function SetHUDVisualsAllowed(allowed)
+    allowed = not not allowed
+    AR.HUDVisualsAllowed = allowed
+    PE.ARHUDVisualsAllowed = allowed
+end
 
 ------------------------------------------------------
 -- CONFIG: Visor sources (transmog / item / buff)
@@ -66,6 +84,7 @@ local VISOR_BUFF_NAMES = {
 ------------------------------------------------------
 -- CONFIG: Strata / frame level cutoff
 ------------------------------------------------------
+
 -- Frame strata in WoW, from lowest to highest draw order:
 --
 --   "BACKGROUND"        (1) - Behind almost everything
@@ -83,15 +102,14 @@ local VISOR_BUFF_NAMES = {
 --
 -- The rule we use when visor is OFF:
 --
---   * If frameStrataRank <  cutoffStrataRank -> HIDE
+--   * If frameStrataRank < cutoffStrataRank        -> HIDE
 --   * If frameStrataRank == cutoffStrataRank
---          AND frameLevel <= cutoffFrameLevel -> HIDE
---   * Else -> do not touch (unless forced by name/prefix)
+--       AND frameLevel <= cutoffFrameLevel         -> HIDE
+--   * Else                                         -> do not touch (unless forced by name/prefix)
 --
-
 -- Your requested default:
-local GOGGLES_MIN_STRATA_NAME = "LOW" -- change to any listed above
-local GOGGLES_MIN_FRAME_LEVEL = 50    -- integer level cutoff
+local GOGGLES_MIN_STRATA_NAME  = "LOW" -- change to any listed above
+local GOGGLES_MIN_FRAME_LEVEL  = 50    -- integer level cutoff
 
 -- Mapping of strata names to an ordered rank
 local STRATA_ORDER = {
@@ -112,45 +130,47 @@ local STRATA_ORDER = {
 -- NEVER_HIDE_NAMES:
 -- Frames we will *never* alter, regardless of strata/level,
 -- and all of their children / descendants are also exempt.
+--
 -- Keys can be:
 --   * Exact names: "WorldMapFrame"
 --   * Patterns:    "^WorldMap", "^Blizzard_.*"
 local NEVER_HIDE_NAMES = {
     -- System / menus
-    ["GameMenuFrame"]       = true,
-    ["WorldMapFrame"]       = true,
-    ["CharacterFrame"]      = true,
-    ["SpellBookFrame"]      = true,
-    ["CollectionsJournal"]  = true,
-    ["EncounterJournal"]    = true,
-    ["AdventureJournal"]    = true,
-    ["HelpFrame"]           = true,
-    ["PVEFrame"]            = true,
-    ["KeyBindingFrame"]     = true,
-    ["FriendsFrame"]        = true,
-    ["GuildFrame"]          = true,
-    ["CommunitiesFrame"]    = true,
+    ["GameMenuFrame"]      = true,
+    ["WorldMapFrame"]      = true,
+    ["CharacterFrame"]     = true,
+    ["SpellBookFrame"]     = true,
+    ["CollectionsJournal"] = true,
+    ["EncounterJournal"]   = true,
+    ["AdventureJournal"]   = true,
+    ["HelpFrame"]          = true,
+    ["PVEFrame"]           = true,
+    ["KeyBindingFrame"]    = true,
+    ["FriendsFrame"]       = true,
+    ["GuildFrame"]         = true,
+    ["CommunitiesFrame"]   = true,
 
     -- Bags: we generally want these to appear when opened
-    ["ContainerFrame1"]     = true,
-    ["ContainerFrame2"]     = true,
-    ["ContainerFrame3"]     = true,
-    ["ContainerFrame4"]     = true,
-    ["ContainerFrame5"]     = true,
-    ["ContainerFrame6"]     = true,
-    ["ContainerFrame7"]     = true,
+    ["ContainerFrame1"] = true,
+    ["ContainerFrame2"] = true,
+    ["ContainerFrame3"] = true,
+    ["ContainerFrame4"] = true,
+    ["ContainerFrame5"] = true,
+    ["ContainerFrame6"] = true,
+    ["ContainerFrame7"] = true,
 
     -- Extra/Zone abilities should always stay visible
     ["ExtraActionBarFrame"] = true,
     ["ZoneAbilityFrame"]    = true,
-	
-	["MinimapCluster"]        = true,
-	["ObjectiveTrackerFrame"] = true,
+
+    ["MinimapCluster"]       = true,
+    ["ObjectiveTrackerFrame"] = true,
 }
 
 -- FORCE_HIDE_NAMES:
 -- Frames we ALWAYS cloak when visor is OFF, *even if* their
 -- strata/level would normally survive the cutoff.
+--
 -- Keys can be:
 --   * Exact names: "ObjectiveTrackerFrame"
 --   * Patterns:    "^PE_AR", "^PE_UIAR"
@@ -161,22 +181,22 @@ local FORCE_HIDE_NAMES = {
 
     -- You can add more if desired:
     -- ["ObjectiveTrackerFrame"] = true,
-    -- ["MinimapCluster"]        = true,
-	
-	["PlayerFrame"] = true,
-    ["PetFrame"] = true,
-    ["TargetFrame"] = true,
-    ["TargetFrameToT"] = true,
-    ["FocusFrame"] = true,
-    ["FocusFrameToT"] = true,
+    -- ["MinimapCluster"] = true,
+
+    ["PlayerFrame"]      = true,
+    ["PetFrame"]         = true,
+    ["TargetFrame"]      = true,
+    ["TargetFrameToT"]   = true,
+    ["FocusFrame"]       = true,
+    ["FocusFrameToT"]    = true,
 
     -- Cast bars
-    ["CastingBarFrame"] = true,
-    ["PetCastingBarFrame"] = true,
-    ["TargetFrameSpellBar"] = true,
-    ["FocusFrameSpellBar"] = true,
-	
-	["NamePlate"] = true,
+    ["CastingBarFrame"]      = true,
+    ["PetCastingBarFrame"]   = true,
+    ["TargetFrameSpellBar"]  = true,
+    ["FocusFrameSpellBar"]   = true,
+
+    ["NamePlate"] = true,
 }
 
 ------------------------------------------------------
@@ -188,9 +208,8 @@ local AuraUtil      = _G.AuraUtil
 local C_Transmog    = _G.C_Transmog
 local TransmogUtil  = _G.TransmogUtil
 local EnumTbl       = _G.Enum or {}
-
 local GetInventoryItemID = _G.GetInventoryItemID
-local INVSLOT_HEAD       = _G.INVSLOT_HEAD or 1
+local INVSLOT_HEAD  = _G.INVSLOT_HEAD or 1
 
 -- frame -> { origAlpha = number, mouseEnabled = bool or nil }
 local managed = {}
@@ -199,17 +218,18 @@ local managed = {}
 -- Split exact names vs patterns
 ------------------------------------------------------
 
-local NEVER_HIDE_EXACT   = {}
-local NEVER_HIDE_PATTERNS = {}
-
-local FORCE_HIDE_EXACT    = {}
-local FORCE_HIDE_PATTERNS = {}
+local NEVER_HIDE_EXACT     = {}
+local NEVER_HIDE_PATTERNS  = {}
+local FORCE_HIDE_EXACT     = {}
+local FORCE_HIDE_PATTERNS  = {}
 
 local function BuildNameMaps()
     for key, flag in pairs(NEVER_HIDE_NAMES) do
         if flag and type(key) == "string" then
             -- Treat things that look like patterns as patterns:
-            if key:find("^%^") or key:find("%.") or key:find("%*") or key:find("%+") or key:find("%-") or key:find("%$") or key:find("%[") or key:find("%(") then
+            if key:find("^%^") or key:find("%.") or key:find("%*")
+               or key:find("%+") or key:find("%-") or key:find("%$")
+               or key:find("%[") or key:find("%(") then
                 table.insert(NEVER_HIDE_PATTERNS, key)
             else
                 NEVER_HIDE_EXACT[key] = true
@@ -219,7 +239,9 @@ local function BuildNameMaps()
 
     for key, flag in pairs(FORCE_HIDE_NAMES) do
         if flag and type(key) == "string" then
-            if key:find("^%^") or key:find("%.") or key:find("%*") or key:find("%+") or key:find("%-") or key:find("%$") or key:find("%[") or key:find("%(") then
+            if key:find("^%^") or key:find("%.") or key:find("%*")
+               or key:find("%+") or key:find("%-") or key:find("%$")
+               or key:find("%[") or key:find("%(") then
                 table.insert(FORCE_HIDE_PATTERNS, key)
             else
                 FORCE_HIDE_EXACT[key] = true
@@ -232,26 +254,18 @@ BuildNameMaps()
 
 local function NameMatchesNeverHide(name)
     if not name then return false end
-    if NEVER_HIDE_EXACT[name] then
-        return true
-    end
+    if NEVER_HIDE_EXACT[name] then return true end
     for _, pat in ipairs(NEVER_HIDE_PATTERNS) do
-        if name:match(pat) then
-            return true
-        end
+        if name:match(pat) then return true end
     end
     return false
 end
 
 local function NameMatchesForceHide(name)
     if not name then return false end
-    if FORCE_HIDE_EXACT[name] then
-        return true
-    end
+    if FORCE_HIDE_EXACT[name] then return true end
     for _, pat in ipairs(FORCE_HIDE_PATTERNS) do
-        if name:match(pat) then
-            return true
-        end
+        if name:match(pat) then return true end
     end
     return false
 end
@@ -261,10 +275,7 @@ end
 ------------------------------------------------------
 
 local function TrackAndSetAlpha(frame, alpha)
-    if not frame
-       or frame:IsForbidden()
-       or type(frame.SetAlpha) ~= "function"
-    then
+    if not frame or frame:IsForbidden() or type(frame.SetAlpha) ~= "function" then
         return
     end
 
@@ -272,12 +283,14 @@ local function TrackAndSetAlpha(frame, alpha)
     if not rec then
         rec = {}
         rec.origAlpha = frame:GetAlpha() or 1
+
         if frame.IsMouseEnabled and frame.EnableMouse then
             local ok, enabled = pcall(frame.IsMouseEnabled, frame)
             if ok then
                 rec.mouseEnabled = enabled
             end
         end
+
         managed[frame] = rec
     end
 
@@ -314,8 +327,7 @@ end
 local function HasConfiguredHeadTransmog()
     -- If no visuals configured, there's nothing to check.
     if not VISOR_HEAD_TRANSMOG_VISUAL_IDS
-       or next(VISOR_HEAD_TRANSMOG_VISUAL_IDS) == nil
-    then
+       or next(VISOR_HEAD_TRANSMOG_VISUAL_IDS) == nil then
         return false
     end
 
@@ -326,8 +338,7 @@ local function HasConfiguredHeadTransmog()
        or type(TransmogUtil.CreateTransmogLocation) ~= "function"
        or not EnumTbl
        or not EnumTbl.TransmogType
-       or not EnumTbl.TransmogModification
-    then
+       or not EnumTbl.TransmogModification then
         return false
     end
 
@@ -348,7 +359,6 @@ local function HasConfiguredHeadTransmog()
         pendingSourceID, pendingVisualID,
         hasUndo, isHideVisual, itemSubclass =
         pcall(C_Transmog.GetSlotVisualInfo, loc)
-
     if not ok then
         -- API signature mismatch or some other weirdness; fail quietly.
         return false
@@ -371,10 +381,12 @@ local function HasConfiguredEquippedHeadItem()
     if not GetInventoryItemID then
         return false
     end
+
     local itemID = GetInventoryItemID("player", INVSLOT_HEAD)
     if not itemID then
         return false
     end
+
     return VISOR_HEAD_ITEM_IDS[itemID] == true
 end
 
@@ -399,15 +411,14 @@ local function HasConfiguredBuff()
         local i = 1
         while true do
             local name = _G.UnitBuff("player", i)
-            if not name then
-                break
-            end
+            if not name then break end
             if name == wanted then
                 return true
             end
             i = i + 1
         end
     end
+
     return false
 end
 
@@ -432,8 +443,8 @@ end
 -- Strata / level decision
 ------------------------------------------------------
 
-local cutoffStrataRank = STRATA_ORDER[GOGGLES_MIN_STRATA_NAME] or STRATA_ORDER.HIGH
-local cutoffFrameLevel = GOGGLES_MIN_FRAME_LEVEL or 0
+local cutoffStrataRank  = STRATA_ORDER[GOGGLES_MIN_STRATA_NAME] or STRATA_ORDER.HIGH
+local cutoffFrameLevel  = GOGGLES_MIN_FRAME_LEVEL or 0
 
 ------------------------------------------------------
 -- NEVER_HIDE and FORCE_HIDE ancestor checks
@@ -478,10 +489,8 @@ end
 ------------------------------------------------------
 
 local function ShouldHideFrame(frame)
-    if not frame
-       or frame:IsForbidden()
-       or type(frame.GetFrameStrata) ~= "function"
-    then
+    if not frame or frame:IsForbidden()
+       or type(frame.GetFrameStrata) ~= "function" then
         return false
     end
 
@@ -496,9 +505,8 @@ local function ShouldHideFrame(frame)
         return true
     end
 
-    local strata = frame:GetFrameStrata() or "MEDIUM"
-    local level  = frame:GetFrameLevel() or 0
-
+    local strata     = frame:GetFrameStrata() or "MEDIUM"
+    local level      = frame:GetFrameLevel() or 0
     local strataRank = STRATA_ORDER[strata] or STRATA_ORDER.MEDIUM
 
     -- Lower strata than cutoff? Hide.
@@ -521,10 +529,17 @@ end
 local currentVisorState -- true = ON, false = OFF
 
 local function ApplyVisorState(visorOn)
+    visorOn = not not visorOn
+
     if currentVisorState == visorOn then
+        -- Still keep the HUD visuals flag in sync; other modules may
+        -- consult it even if nothing else changed this tick.
+        SetHUDVisualsAllowed(visorOn)
         return
     end
+
     currentVisorState = visorOn
+    SetHUDVisualsAllowed(visorOn)
 
     -- Enumerate all frames once per state change
     local f = EnumerateFrames()
@@ -537,8 +552,7 @@ local function ApplyVisorState(visorOn)
             end
 
             if type(f.GetObjectType) ~= "function"
-               or f:GetObjectType() ~= "Frame"
-            then
+               or f:GetObjectType() ~= "Frame" then
                 break
             end
 
@@ -553,7 +567,6 @@ local function ApplyVisorState(visorOn)
                     doTouch = true
                 end
             end
-
         until true
 
         if doTouch then
@@ -572,13 +585,11 @@ end
 -- Event driver
 ------------------------------------------------------
 
-local ev = CreateFrame("Frame", "PE_AR_GogglesEvents", UIParent)
-ev:SetFrameStrata("LOW")
-ev:SetFrameLevel(0)
-
+local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_ENTERING_WORLD")
 ev:RegisterEvent("UNIT_AURA")
 ev:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+
 -- Transmog changes do NOT change item IDs, so we also listen for
 -- transmog-specific events when available.
 ev:RegisterEvent("TRANSMOGRIFY_SUCCESS")
@@ -592,7 +603,6 @@ ev:SetScript("OnEvent", function(self, event, arg1)
     local visorOn = IsVisorOn()
     ApplyVisorState(visorOn)
 end)
-
 
 ------------------------------------------------------
 -- Slash command for debugging / forcing re-eval

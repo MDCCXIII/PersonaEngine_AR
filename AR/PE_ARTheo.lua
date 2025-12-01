@@ -4,12 +4,12 @@
 --
 -- Self-contained layer:
 -- * Uses AR.Reticles for:
---   - Theo arrow scales (target vs focus)
+--     - Theo arrow scales (target vs focus)
 -- * Uses AR.Layout's "Theo Box" region for position/size
 -- * Does NOT touch:
---   - range text ownership logic
---   - torso offsets
---   - scale sliders in AR Reticles
+--     - range text ownership logic
+--     - torso offsets
+--     - scale sliders in AR Reticles
 --
 -- Rule:
 -- * If unit's NAMEPLATE exists & is shown -> reticle
@@ -32,8 +32,9 @@ if not PE or type(PE) ~= "table" then
 end
 
 PE.AR = PE.AR or {}
-local AR   = PE.AR
-AR.Theo    = AR.Theo or {}
+local AR = PE.AR
+
+AR.Theo = AR.Theo or {}
 local Theo = AR.Theo
 
 local Layout -- filled at init
@@ -43,30 +44,42 @@ local Ret    -- AR.Reticles
 -- Libs / globals
 ------------------------------------------------------
 
-local LibStub = _G.LibStub
-local HBD     = LibStub and LibStub("HereBeDragons-2.0", true) or nil
+local LibStub    = _G.LibStub
+local HBD        = LibStub and LibStub("HereBeDragons-2.0", true) or nil
 local RangeCheck = LibStub and LibStub("LibRangeCheck-3.0", true)
-    or _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
+                    or _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
 
-local CreateFrame      = _G.CreateFrame
-local UIParent         = _G.UIParent
-local UnitExists       = _G.UnitExists
-local UnitIsDeadOrGhost= _G.UnitIsDeadOrGhost
-local UnitPosition     = _G.UnitPosition
-local GetPlayerFacing  = _G.GetPlayerFacing
-local C_NamePlate      = _G.C_NamePlate
+local CreateFrame     = _G.CreateFrame
+local UIParent        = _G.UIParent
+local UnitExists      = _G.UnitExists
+local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
+local UnitPosition    = _G.UnitPosition
+local GetPlayerFacing = _G.GetPlayerFacing
+local C_NamePlate     = _G.C_NamePlate
 
 local cos, sin, atan2, abs, pi =
     math.cos, math.sin, math.atan2, math.abs, math.pi
 
-local function IsAREnabled()
-    if AR.IsEnabled and type(AR.IsEnabled) == "function" then
-        return AR.IsEnabled()
+local function AreVisualsAllowed()
+    if PE and PE.ARHUDVisualsAllowed ~= nil then
+        return PE.ARHUDVisualsAllowed
     end
-    if AR.enabled ~= nil then
-        return AR.enabled
+    if AR and AR.HUDVisualsAllowed ~= nil then
+        return AR.HUDVisualsAllowed
     end
     return true
+end
+
+local function IsAREnabled()
+    local enabled
+    if AR.IsEnabled and type(AR.IsEnabled) == "function" then
+        enabled = AR.IsEnabled()
+    elseif AR.enabled ~= nil then
+        enabled = AR.enabled
+    else
+        enabled = true
+    end
+    return enabled and AreVisualsAllowed()
 end
 
 ------------------------------------------------------
@@ -89,7 +102,6 @@ local function GetUnitDistanceYards(unit)
     if not RangeCheck or not UnitExists(unit) then
         return nil
     end
-
     local minR, maxR = RangeCheck:GetRange(unit)
     if not minR and not maxR then
         return nil
@@ -113,7 +125,6 @@ local function IsNameplateVisible(unit)
     if not C_NamePlate or not C_NamePlate.GetNamePlateForUnit then
         return false
     end
-
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     -- Alpha does NOT matter; you can zero it out.
     return plate ~= nil and plate:IsShown()
@@ -141,7 +152,6 @@ local function GetWorldDeltaFromPlayerToUnit(unit)
     if not px or not ux or pInstance ~= uInstance then
         return nil
     end
-
     return (ux - px), (uy - py)
 end
 
@@ -155,9 +165,9 @@ local function GetRelativeAngleToUnit(unit)
         return 0
     end
 
-    local facing      = (GetPlayerFacing and GetPlayerFacing()) or 0
+    local facing = (GetPlayerFacing and GetPlayerFacing()) or 0
     local angleToUnit = atan2(dy, dx)
-    local rel         = angleToUnit - facing
+    local rel = angleToUnit - facing
 
     -- Normalize into [-pi, pi]
     rel = atan2(sin(rel), cos(rel))
@@ -213,16 +223,13 @@ local function EnsureArrow(which)
         return arrow
     end
 
-    local name  = "PE_AR_TheoArrow_" .. which
-    arrow       = CreateFrame("Frame", name, box)
+    local name = "PE_AR_TheoArrow_" .. which
+    arrow = CreateFrame("Frame", name, box)
     arrow:SetFrameStrata("LOW")
+
     local baseLevel = box:GetFrameLevel() or 0
-    if baseLevel < 0 then
-        baseLevel = 0
-    end
-    if baseLevel >= 50 then
-        baseLevel = 49
-    end
+    if baseLevel < 0   then baseLevel = 0   end
+    if baseLevel >= 50 then baseLevel = 49 end
     arrow:SetFrameLevel(baseLevel + 1)
 
     arrow:SetSize(32, 32)
@@ -244,6 +251,7 @@ local function EnsureArrow(which)
 
     arrow:Hide()
     Theo.arrows[which] = arrow
+
     return arrow
 end
 
@@ -252,11 +260,9 @@ local function HideArrow(which)
     if not arrow then
         return
     end
-
     if arrow.distFS then
         arrow.distFS:SetText("")
     end
-
     arrow:Hide()
 end
 
@@ -282,7 +288,8 @@ local function EnsureNoSignalLabel(which)
     -- Stack messages: Target on top, Focus just below.
     if which == "target" then
         fs:SetPoint("TOP", box, "TOP", 0, -6)
-    else -- "focus"
+    else
+        -- "focus"
         fs:SetPoint("TOP", box, "TOP", 0, -26)
     end
 
@@ -302,6 +309,10 @@ local function EnsureNoSignalLabel(which)
 end
 
 local function ShowNoSignal(which, unit)
+    if not AreVisualsAllowed() then
+        return
+    end
+
     local fs = EnsureNoSignalLabel(which)
     if not fs then
         return
@@ -333,13 +344,30 @@ local function ClearNoSignal(which)
     fs:SetText("")
     fs:Hide()
 
-    slot.unit         = nil
-    slot.liveTime     = 0
-    slot.fading       = false
-    slot.fadeRemaining= 0
+    slot.unit          = nil
+    slot.liveTime      = 0
+    slot.fading        = false
+    slot.fadeRemaining = 0
 end
 
 local function UpdateNoSignal(elapsed)
+    -- If HUD visuals are disallowed, nuke all labels and bail.
+    if not AreVisualsAllowed() then
+        for which, slot in pairs(Theo.noSignal) do
+            if slot and slot.label then
+                slot.label:SetText("")
+                slot.label:Hide()
+            end
+            if slot then
+                slot.unit          = nil
+                slot.liveTime      = 0
+                slot.fading        = false
+                slot.fadeRemaining = 0
+            end
+        end
+        return
+    end
+
     for which, slot in pairs(Theo.noSignal) do
         local fs = slot.label
         if not fs or not fs:IsShown() then
@@ -378,17 +406,16 @@ local function UpdateNoSignal(elapsed)
                 -- Fade-out phase: no more updates, just fade alpha
                 if slot.fadeRemaining and slot.fadeRemaining > 0 then
                     slot.fadeRemaining = slot.fadeRemaining - elapsed
-                    local t     = slot.fadeRemaining
+                    local t = slot.fadeRemaining
                     local alpha = math.max(0, t / 0.5)
                     fs:SetAlpha(alpha)
-
                     if t <= 0 then
                         fs:Hide()
                         fs:SetText("")
-                        slot.unit         = nil
-                        slot.liveTime     = 0
-                        slot.fading       = false
-                        slot.fadeRemaining= 0
+                        slot.unit          = nil
+                        slot.liveTime      = 0
+                        slot.fading        = false
+                        slot.fadeRemaining = 0
                     end
                 else
                     fs:Hide()
@@ -415,8 +442,8 @@ local function UpdateArrowForUnit(unit, which)
         return
     end
 
-    local reticleFrame  = GetReticleFrameForUnit(unit)
-    local plateVisible  = IsNameplateVisible(unit)
+    local reticleFrame = GetReticleFrameForUnit(unit)
+    local plateVisible = IsNameplateVisible(unit)
 
     -- If nameplate is visible, always prefer reticle mode.
     if plateVisible and reticleFrame and reticleFrame.Show then
@@ -444,8 +471,8 @@ local function UpdateArrowForUnit(unit, which)
         return
     end
 
-    local w, h  = box:GetWidth(), box:GetHeight()
-    local radius= math.min(w, h) * 0.5 - 18
+    local w, h = box:GetWidth(), box:GetHeight()
+    local radius = math.min(w, h) * 0.5 - 18
     if radius < 10 then
         radius = 10
     end
@@ -515,7 +542,11 @@ local function UpdateArrowForUnit(unit, which)
     end
     arrow:SetScale(scale)
 
-    arrow:Show()
+    if AreVisualsAllowed() then
+        arrow:Show()
+    else
+        arrow:Hide()
+    end
 end
 
 ------------------------------------------------------
@@ -523,8 +554,8 @@ end
 ------------------------------------------------------
 
 local driver
-local throttle  = 0
-local INTERVAL  = 0.02
+local throttle = 0
+local INTERVAL = 0.02
 
 local function OnUpdate(self, elapsed)
     -- Always drive "TPS Signal Lost" fade/update logic

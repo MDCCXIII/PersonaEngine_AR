@@ -8,12 +8,12 @@
 -- * Global mouseover offset (no range-based drift)
 -- * Shared offsets for target+focus (they always overlap)
 -- * Theo mode:
---   - If unit is inside a configurable front cone → screen reticle
---   - If unit is outside the cone → arrow on Theo box border
+--   - If unit is inside a configurable front cone  -> screen reticle
+--   - If unit is outside the cone                  -> arrow on Theo box border
 -- * Exactly one distance label per unit (mouseover/target/focus priority)
 -- * Editors:
---   /pearreticle → reticle + torso + mouseover offset
---   /pearlayout → layout editor toggles Theo box + reticle editor
+--   /pearreticle -> reticle + torso + mouseover offset
+--   /pearlayout  -> layout editor toggles Theo box + reticle editor
 -- ##################################################
 
 local MODULE = "AR Reticles"
@@ -24,26 +24,27 @@ if not PE or type(PE) ~= "table" then
 end
 
 PE.AR = PE.AR or {}
-local AR      = PE.AR
-AR.Reticles   = AR.Reticles or {}
-local Ret     = AR.Reticles
+local AR = PE.AR
+
+AR.Reticles = AR.Reticles or {}
+local Ret = AR.Reticles
 
 ------------------------------------------------------
 -- Libs / globals
 ------------------------------------------------------
 
-local RangeCheck       = _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
-local UIParent         = _G.UIParent
-local CreateFrame      = _G.CreateFrame
-local UnitExists       = _G.UnitExists
-local UnitIsDeadOrGhost= _G.UnitIsDeadOrGhost
-local UnitGUID         = _G.UnitGUID
-local UnitPosition     = _G.UnitPosition
+local RangeCheck     = _G.LibStub and _G.LibStub("LibRangeCheck-3.0", true)
+local UIParent       = _G.UIParent
+local CreateFrame    = _G.CreateFrame
+local UnitExists     = _G.UnitExists
+local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
+local UnitGUID       = _G.UnitGUID
+local UnitPosition   = _G.UnitPosition
 local UnitCreatureType = _G.UnitCreatureType
-local GetPlayerFacing  = _G.GetPlayerFacing
-local C_NamePlate      = _G.C_NamePlate
-local GetCVar          = _G.GetCVar
-local SetCVar          = _G.SetCVar
+local GetPlayerFacing= _G.GetPlayerFacing
+local C_NamePlate    = _G.C_NamePlate
+local GetCVar        = _G.GetCVar
+local SetCVar        = _G.SetCVar
 
 local cos, sin, atan2, abs, sqrt, pi =
     math.cos, math.sin, math.atan2, math.abs, math.sqrt, math.pi
@@ -156,18 +157,10 @@ end
 local function GetTheoDB()
     local root = GetARRoot()
     root.theo = root.theo or {}
-
     local t = root.theo
-    if t.frontAngleDeg == nil then
-        t.frontAngleDeg = 60
-    end -- default cone
-    if t.targetScale == nil then
-        t.targetScale = 1.0
-    end
-    if t.focusScale == nil then
-        t.focusScale = 1.0
-    end
-
+    if t.frontAngleDeg == nil then t.frontAngleDeg = 60 end  -- default cone
+    if t.targetScale   == nil then t.targetScale   = 1.0 end
+    if t.focusScale    == nil then t.focusScale    = 1.0 end
     return t
 end
 
@@ -200,8 +193,8 @@ local function MergeConfig(key)
 
     local db    = GetReticleDB()
     local saved = db[key]
+    local cfg   = CopyTableShallow(defaults)
 
-    local cfg = CopyTableShallow(defaults)
     if type(saved) == "table" then
         for k, v in pairs(saved) do
             cfg[k] = v
@@ -232,11 +225,9 @@ function Ret.GetReticleConfig(key)
     if not key then
         return nil
     end
-
     if not Ret.cfgCache[key] then
         Ret.cfgCache[key] = MergeConfig(key)
     end
-
     return Ret.cfgCache[key]
 end
 
@@ -251,12 +242,8 @@ local function IsSharedReticleField(field)
 end
 
 function Ret.SetReticleField(key, field, value)
-    if not key or not field then
-        return
-    end
-    if not RETICLE_DEFAULTS[key] then
-        return
-    end
+    if not key or not field then return end
+    if not RETICLE_DEFAULTS[key] then return end
 
     local db = GetReticleDB()
     db[key] = db[key] or {}
@@ -309,9 +296,8 @@ function Ret.GetTorsoOffset(reticleKey, unitOrType)
         return 0
     end
 
-    local db   = GetTorsoDB()
+    local db = GetTorsoDB()
     local perT = db[creatureType]
-
     if type(perT) == "table" and type(perT.shared) == "number" then
         return perT.shared
     end
@@ -320,14 +306,10 @@ function Ret.GetTorsoOffset(reticleKey, unitOrType)
 end
 
 function Ret.SetTorsoOffset(creatureType, offset)
-    if not creatureType then
-        return
-    end
-
+    if not creatureType then return end
     local db = GetTorsoDB()
     db[creatureType] = db[creatureType] or {}
     db[creatureType].shared = offset or 0
-
     Ret.ForceUpdate()
 end
 
@@ -356,17 +338,9 @@ function Ret.GetTheoFrontAngleDeg()
 end
 
 function Ret.SetTheoFrontAngleDeg(deg)
-    if type(deg) ~= "number" then
-        return
-    end
-
-    if deg < 10 then
-        deg = 10
-    end
-    if deg > 120 then
-        deg = 120
-    end
-
+    if type(deg) ~= "number" then return end
+    if deg < 10  then deg = 10  end
+    if deg > 120 then deg = 120 end
     local t = GetTheoDB()
     t.frontAngleDeg = deg
     Ret.ForceUpdate()
@@ -387,16 +361,9 @@ function Ret.GetTheoArrowScale(key)
 end
 
 function Ret.SetTheoArrowScale(key, val)
-    if type(val) ~= "number" then
-        return
-    end
-
-    if val < 0.3 then
-        val = 0.3
-    end
-    if val > 2.0 then
-        val = 2.0
-    end
+    if type(val) ~= "number" then return end
+    if val < 0.3 then val = 0.3 end
+    if val > 2.0 then val = 2.0 end
 
     local t = GetTheoDB()
     if key == "target" then
@@ -418,11 +385,9 @@ local function EnsureNameplateCVars()
     if not C_NamePlate then
         return
     end
-
     if originalNameplateMotion == nil then
         originalNameplateMotion = GetCVar("nameplateMotion")
     end
-
     if GetCVar("nameplateMotion") ~= "1" then
         SetCVar("nameplateMotion", "1")
     end
@@ -438,14 +403,26 @@ end
 -- Misc helpers
 ------------------------------------------------------
 
-local function IsAREnabled()
-    if AR.IsEnabled and type(AR.IsEnabled) == "function" then
-        return AR.IsEnabled()
+local function AreVisualsAllowed()
+    if PE and PE.ARHUDVisualsAllowed ~= nil then
+        return PE.ARHUDVisualsAllowed
     end
-    if AR.enabled ~= nil then
-        return AR.enabled
+    if AR and AR.HUDVisualsAllowed ~= nil then
+        return AR.HUDVisualsAllowed
     end
     return true
+end
+
+local function IsAREnabled()
+    local enabled
+    if AR.IsEnabled and type(AR.IsEnabled) == "function" then
+        enabled = AR.IsEnabled()
+    elseif AR.enabled ~= nil then
+        enabled = AR.enabled
+    else
+        enabled = true
+    end
+    return enabled and AreVisualsAllowed()
 end
 
 local function IsValidUnit(unit)
@@ -483,9 +460,10 @@ local function GetRelativeAngleAndDistance(unit)
         return nil
     end
 
-    local dx     = ux - px
-    local dy     = uy - py
+    local dx = ux - px
+    local dy = uy - py
     local dist2D = sqrt(dx * dx + dy * dy)
+
     local facing = GetPlayerFacing() or 0
     local angle  = atan2(dy, dx)
     local rel    = angle - facing
@@ -504,8 +482,8 @@ local function ComputeScale(dist, cfg)
         return 1.0
     end
 
-    local near     = cfg.near or 0
-    local far      = cfg.far or (near + 1)
+    local near     = cfg.near     or 0
+    local far      = cfg.far      or (near + 1)
     local minScale = cfg.minScale or 0.5
     local maxScale = cfg.maxScale or 1.0
 
@@ -558,8 +536,8 @@ local function CreateReticleFrame(name, key)
     f.unit          = nil
     f.dist          = nil
     f._currentScale = 1
-    f:Hide()
 
+    f:Hide()
     return f
 end
 
@@ -567,8 +545,8 @@ end
 -- Theo box + arrow frames
 ------------------------------------------------------
 
-Ret.frames    = Ret.frames or {}
-Ret.theoBox   = Ret.theoBox or nil
+Ret.frames    = Ret.frames    or {}
+Ret.theoBox   = Ret.theoBox   or nil
 Ret.theoArrow = Ret.theoArrow or {} -- per key
 
 local function EnsureTheoBox()
@@ -579,14 +557,14 @@ local function EnsureTheoBox()
     local box = CreateFrame("Frame", "PE_AR_TheoBox", UIParent, "BackdropTemplate")
     box:SetFrameStrata("LOW")
     box:SetFrameLevel(0)
-    box:EnableMouse(false)           -- always click-through in normal play
+    box:EnableMouse(false) -- always click-through in normal play
     box:SetIgnoreParentAlpha(true)
     box:SetBackdrop({
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         edgeSize = 12,
     })
     box:SetBackdropBorderColor(0.2, 1.0, 0.7, 0.9)
-    box:SetAlpha(0)                  -- hidden by default
+    box:SetAlpha(0) -- hidden by default
     Ret.theoBox = box
 
     local center = box:CreateTexture(nil, "OVERLAY")
@@ -631,24 +609,23 @@ local function CreateTheoArrowFrame(name, key)
 
     f.key  = key
     f.unit = nil
-    f:Hide()
 
+    f:Hide()
     return f
 end
 
 local function EnsureFrames()
     if not Ret.frames.target then
-        Ret.frames.target   = CreateReticleFrame("PE_AR_TargetReticle", "target")
-        Ret.frames.focus    = CreateReticleFrame("PE_AR_FocusReticle", "focus")
-        Ret.frames.mouseover= CreateReticleFrame("PE_AR_MouseoverIndicator", "mouseover")
+        Ret.frames.target  = CreateReticleFrame("PE_AR_TargetReticle", "target")
+        Ret.frames.focus   = CreateReticleFrame("PE_AR_FocusReticle", "focus")
+        Ret.frames.mouseover = CreateReticleFrame("PE_AR_MouseoverIndicator", "mouseover")
     end
 
     if not Ret.theoArrow.target then
         Ret.theoArrow.target = CreateTheoArrowFrame("PE_AR_TheoTarget", "target")
     end
-
     if not Ret.theoArrow.focus then
-        Ret.theoArrow.focus = CreateTheoArrowFrame("PE_AR_TheoFocus", "focus")
+        Ret.theoArrow.focus  = CreateTheoArrowFrame("PE_AR_TheoFocus", "focus")
     end
 end
 
@@ -657,49 +634,34 @@ end
 ------------------------------------------------------
 
 local function HideReticleFrame(f)
-    if not f then
-        return
-    end
-
+    if not f then return end
     f.unit          = nil
     f.dist          = nil
     f._currentScale = 1
-
     if f.distFS then
         f.distFS:SetText("")
         f.distFS:SetScale(1)
     end
-
     f:Hide()
 end
 
 local function HideTheoArrow(f)
-    if not f then
-        return
-    end
-
+    if not f then return end
     f.unit = nil
-
     if f.distFS then
         f.distFS:SetText("")
         f.distFS:SetScale(1)
     end
-
     f:Hide()
 end
 
 local function ApplySmoothScale(frame, targetScale)
-    if not frame then
-        return
-    end
-
+    if not frame then return end
     targetScale = targetScale or 1.0
     local current = frame._currentScale or targetScale
-    local new     = current + (targetScale - current) * SCALE_SMOOTHING
-
+    local new = current + (targetScale - current) * SCALE_SMOOTHING
     frame._currentScale = new
     frame:SetScale(new)
-
     if frame.distFS then
         frame.distFS:SetScale(1 / new)
     end
@@ -716,17 +678,13 @@ local function BuildGuidOwner()
         if not UnitExists(unit) then
             return
         end
-
         local guid = UnitGUID(unit)
         if not guid then
             return
         end
-
         local prio = OWNER_PRIORITY[key] or 999
         local cur  = guidOwner[guid]
-
         if not cur or prio < cur.prio then
-            -- lower = higher priority
             guidOwner[guid] = { key = key, prio = prio }
         end
     end
@@ -742,12 +700,10 @@ local function HasOwnershipForUnit(guidOwner, unit, key)
     if not guidOwner or not unit or not key or not UnitExists(unit) then
         return false
     end
-
     local guid = UnitGUID(unit)
     if not guid then
         return false
     end
-
     local owner = guidOwner[guid]
     return owner and owner.key == key
 end
@@ -760,15 +716,11 @@ local function UpdateScreenReticle(unit, frame, cfg, guidOwner)
     if not frame or not cfg then
         return HideReticleFrame(frame)
     end
-
     if not IsAREnabled() or not IsValidUnit(unit) then
         return HideReticleFrame(frame)
     end
 
-    local plate =
-        C_NamePlate and C_NamePlate.GetNamePlateForUnit and
-        C_NamePlate.GetNamePlateForUnit(unit)
-
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
     if not plate or not plate.UnitFrame or not plate.UnitFrame.healthBar then
         return HideReticleFrame(frame)
     end
@@ -790,7 +742,6 @@ local function UpdateScreenReticle(unit, frame, cfg, guidOwner)
     frame.dist = dist
 
     local showText = HasOwnershipForUnit(guidOwner, unit, frame.key)
-
     if frame.distFS then
         if showText and dist then
             frame.distFS:SetFormattedText("%.0f yd", dist)
@@ -805,16 +756,19 @@ local function UpdateScreenReticle(unit, frame, cfg, guidOwner)
     if distScale < 0.1 then
         distScale = 0.1
     end
-
     ApplySmoothScale(frame, distScale)
-    frame:Show()
+
+    if AreVisualsAllowed() then
+        frame:Show()
+    else
+        frame:Hide()
+    end
 end
 
 local function UpdateTheoArrow(unit, key, arrowFrame, guidOwner)
     if not arrowFrame then
         return
     end
-
     if not IsAREnabled() or not IsValidUnit(unit) then
         return HideTheoArrow(arrowFrame)
     end
@@ -856,18 +810,12 @@ local function UpdateTheoArrow(unit, key, arrowFrame, guidOwner)
     end
 
     local scale = Ret.GetTheoArrowScale(key) or 1.0
-    if scale < 0.3 then
-        scale = 0.3
-    end
-    if scale > 2.0 then
-        scale = 2.0
-    end
-
+    if scale < 0.3 then scale = 0.3 end
+    if scale > 2.0 then scale = 2.0 end
     arrowFrame:SetScale(scale)
 
     local showText = HasOwnershipForUnit(guidOwner, unit, key)
     local distText = arrowFrame.distFS
-
     if distText then
         if showText and dist then
             distText:SetFormattedText("%.0f yd", dist)
@@ -876,27 +824,27 @@ local function UpdateTheoArrow(unit, key, arrowFrame, guidOwner)
         else
             distText:SetText("")
         end
-
         distText:SetScale(1 / scale)
     end
 
     arrowFrame.unit = unit
-    arrowFrame:Show()
+
+    if AreVisualsAllowed() then
+        arrowFrame:Show()
+    else
+        arrowFrame:Hide()
+    end
 end
 
 local function UpdateMouseoverIndicator(frame, cfg, guidOwner)
     if not frame or not cfg then
         return HideReticleFrame(frame)
     end
-
     if not IsAREnabled() or not IsValidUnit("mouseover") then
         return HideReticleFrame(frame)
     end
 
-    local plate =
-        C_NamePlate and C_NamePlate.GetNamePlateForUnit and
-        C_NamePlate.GetNamePlateForUnit("mouseover")
-
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit("mouseover")
     if not plate or not plate.UnitFrame or not plate.UnitFrame.healthBar then
         return HideReticleFrame(frame)
     end
@@ -918,7 +866,6 @@ local function UpdateMouseoverIndicator(frame, cfg, guidOwner)
     frame.dist = dist
 
     local showText = HasOwnershipForUnit(guidOwner, "mouseover", "mouseover")
-
     if frame.distFS then
         if showText and dist then
             frame.distFS:SetFormattedText("%.0f yd", dist)
@@ -933,9 +880,13 @@ local function UpdateMouseoverIndicator(frame, cfg, guidOwner)
     if distScale < 0.1 then
         distScale = 0.1
     end
-
     ApplySmoothScale(frame, distScale)
-    frame:Show()
+
+    if AreVisualsAllowed() then
+        frame:Show()
+    else
+        frame:Hide()
+    end
 end
 
 ------------------------------------------------------
@@ -960,7 +911,7 @@ local function OnUpdate(self, elapsed)
     EnsureTheoBox()
 
     local guidOwner = BuildGuidOwner()
-    local frontAngle= Ret.GetTheoFrontAngleRad()
+    local frontAngle = Ret.GetTheoFrontAngleRad()
 
     -- TARGET
     do
@@ -969,7 +920,7 @@ local function OnUpdate(self, elapsed)
         local theoArrow = Ret.theoArrow.target
         local cfg       = Ret.GetReticleConfig("target")
 
-        if IsValidUnit(unit) then
+        if IsValidUnit(unit) and AreVisualsAllowed() then
             local rel = select(1, GetRelativeAngleAndDistance(unit))
             if rel and abs(rel) > frontAngle then
                 HideReticleFrame(reticle)
@@ -991,7 +942,7 @@ local function OnUpdate(self, elapsed)
         local theoArrow = Ret.theoArrow.focus
         local cfg       = Ret.GetReticleConfig("focus")
 
-        if IsValidUnit(unit) then
+        if IsValidUnit(unit) and AreVisualsAllowed() then
             local rel = select(1, GetRelativeAngleAndDistance(unit))
             if rel and abs(rel) > frontAngle then
                 HideReticleFrame(reticle)
@@ -1018,24 +969,15 @@ local function OnNameplateAdded(_, event, unit)
         return
     end
 
-    local plate =
-        C_NamePlate and C_NamePlate.GetNamePlateForUnit and
-        C_NamePlate.GetNamePlateForUnit(unit)
-
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
     if not plate or not plate.UnitFrame then
         return
     end
 
     local uf = plate.UnitFrame
-    if uf.healthBar then
-        uf.healthBar:SetAlpha(0.0)
-    end
-    if uf.castBar then
-        uf.castBar:SetAlpha(0.0)
-    end
-    if uf.name then
-        uf.name:SetAlpha(0.0)
-    end
+    if uf.healthBar then uf.healthBar:SetAlpha(0.0) end
+    if uf.castBar   then uf.castBar:SetAlpha(0.0)   end
+    if uf.name      then uf.name:SetAlpha(0.0)      end
 end
 
 function Ret.Init()
@@ -1066,12 +1008,17 @@ function Ret.SetEditorEnabled(flag)
         Ret.EditorUI.SetEnabled(flag)
     end
 
+    -- Respect goggles flag when trying to show editor overlays
     if Ret.theoBox then
-        Ret.theoBox:SetAlpha(flag and 1 or 0)
+        if flag and AreVisualsAllowed() then
+            Ret.theoBox:SetAlpha(1)
+        else
+            Ret.theoBox:SetAlpha(0)
+        end
     end
 
     if Ret.theoCenter then
-        if flag then
+        if flag and AreVisualsAllowed() then
             Ret.theoCenter:Show()
         else
             Ret.theoCenter:Hide()
