@@ -54,6 +54,43 @@ local function SetHUDVisualsAllowed(allowed)
     PE.ARHUDVisualsAllowed = allowed
 end
 
+-- Nudge AR subsystems when visor state changes so they re-evaluate
+-- the HUDVisualsAllowed flag immediately.
+local function ForceARHUDRefresh()
+    if not AR then return end
+
+    local function safe(fn, ...)
+        if type(fn) ~= "function" then return end
+        local ok, err = pcall(fn, ...)
+        if not ok and geterrorhandler then
+            geterrorhandler()(err)
+        end
+    end
+
+    -- Nameplate HUD, if it wants to react specially
+    if AR.HUD and AR.HUD.Refresh then
+        safe(AR.HUD.Refresh, "VISOR_TOGGLE")
+    end
+
+    -- Screen-space dossiers
+    if AR.TargetPanel and AR.TargetPanel.ForceUpdate then
+        safe(AR.TargetPanel.ForceUpdate)
+    end
+    if AR.FocusPanel and AR.FocusPanel.ForceUpdate then
+        safe(AR.FocusPanel.ForceUpdate)
+    end
+    if AR.MouseoverPanel and AR.MouseoverPanel.ForceUpdate then
+        safe(AR.MouseoverPanel.ForceUpdate)
+    end
+    if AR.PlayerPanel and AR.PlayerPanel.ForceUpdate then
+        safe(AR.PlayerPanel.ForceUpdate)
+    end
+    if AR.PetPanel and AR.PetPanel.ForceUpdate then
+        safe(AR.PetPanel.ForceUpdate)
+    end
+end
+
+
 ------------------------------------------------------
 -- CONFIG: Visor sources (transmog / item / buff)
 ------------------------------------------------------
@@ -165,6 +202,11 @@ local NEVER_HIDE_NAMES = {
 
     ["MinimapCluster"]       = true,
     ["ObjectiveTrackerFrame"] = true,
+	
+	-- Chat + Quick Join should never be cloaked
+	["^ChatFrame"] = true,
+	["^QuickJoin"] = true,
+	["^GeneralDockManager"] = true,
 }
 
 -- FORCE_HIDE_NAMES:
@@ -197,6 +239,11 @@ local FORCE_HIDE_NAMES = {
     ["FocusFrameSpellBar"]   = true,
 
     ["NamePlate"] = true,
+	["MainMenuBarBackpackButtons"] = true,
+	["MainMenuBarBackpack"] = true,
+	["MainMenuBarBackpackButton"] = true,
+	["CharacterReagentBag0Slot"] = true,
+	["TomTomBlock"] = true,
 }
 
 ------------------------------------------------------
@@ -274,6 +321,38 @@ end
 -- Track & restore alpha + clickability
 ------------------------------------------------------
 
+-- Capture original alpha for important regions (textures / fontstrings)
+local function SnapshotRegions(frame, rec)
+    if rec.regions then
+        return -- already snapped for this frame
+    end
+
+    local regions = { frame:GetRegions() }
+    if not regions or #regions == 0 then
+        return
+    end
+
+    rec.regions = {}
+
+    for i = 1, #regions do
+        local r = regions[i]
+        if r and not r:IsForbidden() then
+            local hasGet = type(r.GetAlpha) == "function"
+            local hasSet = type(r.SetAlpha) == "function"
+            if hasGet and hasSet then
+                local ok, alpha = pcall(r.GetAlpha, r)
+                if ok then
+                    table.insert(rec.regions, {
+                        region    = r,
+                        origAlpha = alpha or 1,
+                    })
+                end
+            end
+        end
+    end
+end
+
+
 local function TrackAndSetAlpha(frame, alpha)
     if not frame or frame:IsForbidden() or type(frame.SetAlpha) ~= "function" then
         return
@@ -292,9 +371,23 @@ local function TrackAndSetAlpha(frame, alpha)
         end
 
         managed[frame] = rec
+
+        -- On first touch, snapshot any child regions with their own alpha
+        SnapshotRegions(frame, rec)
     end
 
     frame:SetAlpha(alpha or 0)
+
+    -- Also zero out any regions that might be ignoring parent alpha
+    if rec.regions then
+        for i = 1, #rec.regions do
+            local rr = rec.regions[i]
+            local r  = rr.region
+            if r and not r:IsForbidden() and type(r.SetAlpha) == "function" then
+                r:SetAlpha(0)
+            end
+        end
+    end
 
     -- Disable mouse clicks while hidden, if supported.
     if frame.EnableMouse then
@@ -313,11 +406,23 @@ local function RestoreAlpha(frame)
 
     frame:SetAlpha(rec.origAlpha or 1)
 
+    -- Restore original region alphas
+    if rec.regions then
+        for i = 1, #rec.regions do
+            local rr = rec.regions[i]
+            local r  = rr.region
+            if r and not r:IsForbidden() and type(r.SetAlpha) == "function" then
+                r:SetAlpha(rr.origAlpha or 1)
+            end
+        end
+    end
+
     -- Restore original mouse-enabled state, if we captured one.
     if frame.EnableMouse and rec.mouseEnabled ~= nil then
         frame:EnableMouse(rec.mouseEnabled)
     end
 end
+
 
 ------------------------------------------------------
 -- Visor source checks
@@ -551,10 +656,9 @@ local function ApplyVisorState(visorOn)
                 break
             end
 
-            if type(f.GetObjectType) ~= "function"
-               or f:GetObjectType() ~= "Frame" then
-                break
-            end
+            -- if type(f.GetObjectType) ~= "function" then
+                -- break
+            -- end
 
             if visorOn then
                 -- When visor is ON, restore only frames we previously touched.
@@ -579,6 +683,9 @@ local function ApplyVisorState(visorOn)
 
         f = EnumerateFrames(f)
     end
+	-- After cloaking/uncloaking the base UI, force the AR HUD to
+    -- re-evaluate its own visuals gate so 3D models/cards react instantly.
+    ForceARHUDRefresh()
 end
 
 ------------------------------------------------------

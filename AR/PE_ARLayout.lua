@@ -123,6 +123,16 @@ Layout.defaults = Layout.defaults or {
         width   = 260,
         height  = 80,
     },
+	
+	-- Cardinals Helper icon (N/E/S/W sigil)
+    ["Cardinal Helper"] = {
+        point  = "CENTER",
+        relPoint= "CENTER",
+        x      = 0,
+        y      = 160,   -- a bit above center; tweak in /pearlayout
+        width  = 128,
+        height = 128,
+    },
 
     -- Theo Box: default region for Theo arrows
     ["Theo Box"] = {

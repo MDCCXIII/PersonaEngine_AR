@@ -154,6 +154,18 @@ local function IsAREnabled()
     return true -- assume on if nothing explicit is exposed
 end
 
+-- Central gate for "are AR HUD visuals allowed to draw?"
+local function AreVisualsAllowed()
+    if PE and PE.ARHUDVisualsAllowed ~= nil then
+        return PE.ARHUDVisualsAllowed
+    end
+    if AR and AR.HUDVisualsAllowed ~= nil then
+        return AR.HUDVisualsAllowed
+    end
+    return true
+end
+
+
 ------------------------------------------------------
 -- Frame creation
 ------------------------------------------------------
@@ -428,15 +440,14 @@ end
 function Panel.Update()
     local frame = CreatePanelFrame()
 
-    if not IsAREnabled() then
+    -- If AR is disabled *or* visor says HUD is cloaked, keep panel dark.
+    if not IsAREnabled() or not AreVisualsAllowed() then
         frame:SetAlpha(0)
         frame:EnableMouse(false)
-
         if Panel.model then
             Panel.model:SetAlpha(0)
             Panel.model:ClearModel()
         end
-
         return
     end
 

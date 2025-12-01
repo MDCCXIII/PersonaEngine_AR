@@ -87,38 +87,41 @@ local function CreateHandle(regionName, frame)
         handle.label:SetText(regionName or "AR Region")
 
         -- Mousewheel resize for Theo box while in /pearlayout
-        handle:EnableMouseWheel(true)
-        handle:SetScript("OnMouseWheel", function(self, delta)
-            -- Only special-case the Theo box; other regions ignore scroll
-            if regionName ~= "Theo Box" then
-                return
-            end
+		handle:EnableMouseWheel(true)
+		handle:SetScript("OnMouseWheel", function(self, delta)
+			-- Regions that can be resized via mousewheel in /pearlayout
+			local isResizable =
+				(regionName == "Theo Box") or
+				(regionName == "Cardinal Helper")
 
-            local parent = self:GetParent()
-            if not parent then
-                return
-            end
+			if not isResizable then
+				return
+			end
 
-            local step    = 8 * delta
-            local minSize = 40
-            local w, h    = parent:GetSize()
+			local parent = self:GetParent()
+			if not parent then return end
 
-            if IsAltKeyDown() then
-                -- Alt: adjust vertical size only
-                h = math.max(minSize, h + step)
-            else
-                -- Normal: grow/shrink both width and height together
-                w = math.max(minSize, w + step)
-                h = math.max(minSize, h + step)
-            end
+			local step    = 8 * delta
+			local minSize = 40
 
-            parent:SetSize(w, h)
+			local w, h = parent:GetSize()
+			if IsAltKeyDown() then
+				-- Alt: adjust vertical size only
+				h = math.max(minSize, h + step)
+			else
+				-- Normal: grow/shrink both width and height together
+				w = math.max(minSize, w + step)
+				h = math.max(minSize, h + step)
+			end
 
-            -- Persist the new size into layout DB
-            if Layout.SaveFromFrame then
-                Layout.SaveFromFrame(regionName, parent)
-            end
-        end)
+			parent:SetSize(w, h)
+
+			-- Persist the new size into layout DB
+			if Layout.SaveFromFrame then
+				Layout.SaveFromFrame(regionName, parent)
+			end
+		end)
+
 
         handle:Hide()
     end

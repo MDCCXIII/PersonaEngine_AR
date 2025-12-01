@@ -36,6 +36,7 @@ AR\UI\PE_UIARPetPanel.lua
 AR\UI\PE_UIARPlayerPanel.lua
 
 
-AR/PE_ARGoggles.lua
+AR\UI\PE_UIARCardinalHelper.lua
+AR\PE_ARGoggles.lua
 
 # (no bindings, no tooltips for now)
