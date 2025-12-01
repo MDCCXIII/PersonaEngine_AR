@@ -139,7 +139,7 @@ local function EnsureEditorFrame()
     local f = CreateFrame("Frame", "PE_AR_ReticleEditor", UIParent, "BackdropTemplate")
     f:SetFrameStrata("LOW")
     f:SetFrameLevel(10)
-    f:SetSize(320, 420)
+    f:SetSize(320, 700)
     f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     f:SetBackdrop({
         bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
